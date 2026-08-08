@@ -1,10 +1,33 @@
-import { memo, useMemo, useRef, useState, useEffect } from 'react';
+import { memo, useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useGame } from '../context/GameContext';
 import Piece from './Piece';
 import {
   BOARD_SIZE, HOME_BASE_POSITIONS, GAME_PHASES,
 } from '../data/constants';
 import { getPieceCoordinates, computeAnimationFrames } from '../logic/gameUtils';
+
+function useFitSquare(ref) {
+  const [size, setSize] = useState(0);
+
+  const update = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const side = Math.floor(Math.min(rect.width, rect.height));
+    if (side > 0) setSize(side);
+  }, [ref]);
+
+  useLayoutEffect(() => {
+    update();
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [update]);
+
+  return size;
+}
 
 function getSelectableCells(availableMoves, players, currentTurn) {
   const cells = new Set();
@@ -228,45 +251,54 @@ function GameBoard({ onSelectPiece }) {
     return elements;
   }, [piecesByCell, handleSelectPiece]);
 
-  return (
-    <div className="w-full max-w-lg mx-auto select-none">
-      <div
-        className="relative overflow-hidden"
-        style={{
-          borderRadius: '12px',
-          border: '4px solid #0D3B0F',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          backgroundColor: '#1B5E20',
-        }}
-      >
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '1' }}>
-          <img
-            src="/textures/Board.png"
-            alt="Ludo Board"
-            className="absolute inset-0 w-full h-full"
-            style={{ objectFit: 'contain', pointerEvents: 'none' }}
-            draggable={false}
-          />
+  const fitRef = useRef(null);
+  const fitSize = useFitSquare(fitRef);
 
+  return (
+    <div ref={fitRef} className="w-full h-full select-none">
+      {fitSize > 0 && (
+        <div className="w-full h-full flex items-center justify-center">
           <div
-            className="absolute inset-0 grid"
+            className="relative overflow-hidden"
             style={{
-              gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
-              gridTemplateRows: `repeat(${BOARD_SIZE}, 1fr)`,
+              width: fitSize,
+              height: fitSize,
+              borderRadius: '12px',
+              border: '4px solid #0D3B0F',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              backgroundColor: '#1B5E20',
             }}
           >
-            <GridOverlay
-              selectableCells={selectableCells}
-              availableMoves={availableMoves}
-              players={players}
-              currentTurn={currentTurn}
-              handleSelectPiece={handleSelectPiece}
-            />
-          </div>
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              <img
+                src="/textures/Board.png"
+                alt="Ludo Board"
+                className="absolute inset-0 w-full h-full"
+                style={{ objectFit: 'contain', pointerEvents: 'none' }}
+                draggable={false}
+              />
 
-          {stackedPieces}
+              <div
+                className="absolute inset-0 grid"
+                style={{
+                  gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
+                  gridTemplateRows: `repeat(${BOARD_SIZE}, 1fr)`,
+                }}
+              >
+                <GridOverlay
+                  selectableCells={selectableCells}
+                  availableMoves={availableMoves}
+                  players={players}
+                  currentTurn={currentTurn}
+                  handleSelectPiece={handleSelectPiece}
+                />
+              </div>
+
+              {stackedPieces}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

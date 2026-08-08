@@ -35,19 +35,16 @@ function PlayerPanel({ playerId: _playerId, player, isCurrentTurn, isMe = false 
   return (
     <div
       className={`
-        rounded-xl p-1.5 sm:p-2 md:p-3 lg:p-4 transition-all duration-500 border-2
-        ${isCurrentTurn
-          ? 'shadow-lg scale-[1.02]'
-          : 'shadow opacity-80'
-        }
+        rounded-xl p-1 sm:p-1.5 md:p-3 lg:p-4 transition-colors duration-500 border-2
+        ${isCurrentTurn ? 'shadow-lg' : 'shadow opacity-80'}
       `}
       style={{
         backgroundColor: isCurrentTurn ? `${colors.bg}` : '#f9f9f9',
         borderColor: isCurrentTurn ? colors.primary : '#e5e7eb',
-        borderWidth: isCurrentTurn ? '3px' : '1px',
+        borderWidth: '2px',
       }}
     >
-      <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+      <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1 md:mb-2">
         <img
           src={PIECE_IMAGES[player.color]}
           alt=""

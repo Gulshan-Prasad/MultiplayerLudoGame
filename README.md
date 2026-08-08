@@ -95,7 +95,6 @@ src/
 │   ├── Dice.jsx                    # Dice animation & display
 │   ├── PlayerPanel.jsx             # Player info card
 │   ├── WinnerModal.jsx             # Win/game-over modal
-│   ├── GameHistory.jsx             # Move history list
 │   ├── SetupScreen.jsx             # Local game setup + Online button
 │   ├── MultiplayerMenu.jsx         # Create/join room UI
 │   └── MultiplayerLobby.jsx        # Pre-game lobby with ready states

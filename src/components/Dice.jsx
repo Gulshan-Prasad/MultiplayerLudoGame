@@ -33,7 +33,7 @@ function Dice() {
   const isSix = diceValue === 6 && !diceRolling;
 
   return (
-    <div className="flex flex-col items-center gap-2 sm:gap-3">
+    <div className="flex flex-col items-center gap-1.5 sm:gap-3">
       {showPenalty && (
         <div className="text-red-600 font-bold text-xs sm:text-sm md:text-base animate-bounce bg-red-100 px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg border border-red-200 text-center">
           Three 6's! Turn forfeited!
@@ -48,7 +48,7 @@ function Dice() {
 
       <div
         className={`
-          relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-2xl select-none cursor-pointer
+          relative w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-2xl select-none cursor-pointer
           transition-all duration-300
           ${canRoll ? 'hover:scale-110 hover:shadow-2xl active:scale-95' : ''}
           ${shaking || diceRolling ? 'animate-[shake_0.3s_ease-in-out_infinite]' : ''}
@@ -86,7 +86,7 @@ function Dice() {
       {canRoll && (
         <button
           onClick={handleRoll}
-          className="w-full px-4 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold rounded-xl shadow-md text-sm sm:text-base
+          className="w-full px-4 sm:px-5 py-1.5 sm:py-2.5 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold rounded-xl shadow-md text-sm sm:text-base
             hover:shadow-lg hover:from-blue-600 hover:to-blue-800 active:scale-[0.97] transition-all duration-200
             focus:outline-none focus:ring-4 focus:ring-blue-300"
         >

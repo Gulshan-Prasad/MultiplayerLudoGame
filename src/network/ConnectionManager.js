@@ -1,32 +1,17 @@
-import { joinRoom, selfId } from '@trystero-p2p/torrent';
+import { joinRoom, selfId } from '@trystero-p2p/mqtt';
 import { APP_NAME, HEARTBEAT_INTERVAL_MS } from './NetworkConstants';
 import { MESSAGE_TYPES } from './NetworkMessages';
 
 const STALE_PEER_CHECK_MS = 5000;
 const STALE_PEER_TIMEOUT_MS = 45000;
 
-// Combined STUN + TURN servers for real-world NAT traversal.
-// STUN handles typical NATs; TURN relays traffic when direct
-// connectivity is impossible (symmetric NAT, strict firewalls).
-// Free public TURN: Open Relay Project (https://openrelayproject.org)
+// Minimal STUN + TURN for fast real-world NAT traversal.
+// Trickle ICE streams candidates as they're found, so fewer servers
+// means the first host-candidate offer goes out sooner. TURN remains
+// as a fallback for symmetric NAT / strict firewalls.
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun4.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'stun:openrelay.metered.ca:80' },
-  {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
   {
     urls: 'turn:openrelay.metered.ca:443?transport=tcp',
     username: 'openrelayproject',
@@ -35,8 +20,15 @@ const ICE_SERVERS = [
 ];
 
 const RELAY_CONFIG = {
-  // Use more public WebTorrent trackers for robust signaling.
-  redundancy: 4,
+  // Use public MQTT brokers for fast, push-based signaling.
+  // Public free brokers (EmQX/HiveMQ/Mosquitto) relay SDP instantly —
+  // no announce polling like the torrent trackers.
+  urls: [
+    'wss://broker.emqx.io:8084/mqtt',
+    'wss://broker.hivemq.com:8884/mqtt',
+    'wss://broker-cn.emqx.io:8084/mqtt',
+  ],
+  redundancy: 3,
 };
 
 export class ConnectionManager {
@@ -61,6 +53,7 @@ export class ConnectionManager {
     this.room = joinRoom(
       {
         appId: APP_NAME,
+        trickleIce: true,
         rtcConfig: {
           iceServers: ICE_SERVERS,
         },
