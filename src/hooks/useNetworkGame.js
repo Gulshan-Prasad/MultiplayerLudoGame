@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useGame } from '../context/GameContext';
 import { useNetwork } from '../network/useNetwork';
+import { rollDice } from '../logic/gameUtils';
 import { GAME_PHASES } from '../data/constants';
 
 export function useNetworkGame() {
@@ -20,7 +21,7 @@ export function useNetworkGame() {
     if (network.isMultiplayer) {
       if (currentTurn !== network.myPlayerId) return false;
       const now = Date.now();
-      if (now - lastActionTimeRef.current < 500) return false;
+      if (now - lastActionTimeRef.current < 150) return false;
     }
 
     return true;
@@ -34,7 +35,7 @@ export function useNetworkGame() {
     } finally {
       setTimeout(() => {
         actionInFlightRef.current = false;
-      }, 400);
+      }, 150);
     }
   }, []);
 
@@ -47,14 +48,20 @@ export function useNetworkGame() {
 
     const reqId = Date.now();
     lastRequestRef.current = reqId;
+    const diceValue = rollDice();
 
     _sendAction(() => {
-      network.networkRollDice(game.state.currentTurn, reqId);
+      if (!network.isHost) {
+        game.dispatch({ type: 'ROLL_DICE', payload: { value: diceValue } });
+      }
+      network.networkRollDice(game.state.currentTurn, diceValue);
     });
   }, [
     network.isMultiplayer,
+    network.isHost,
     game.state.currentTurn,
     game.rollDice,
+    game.dispatch,
     network.networkRollDice,
     _canAct,
     _sendAction,
@@ -71,6 +78,9 @@ export function useNetworkGame() {
     lastRequestRef.current = reqId;
 
     _sendAction(() => {
+      if (!network.isHost) {
+        game.dispatch({ type: 'SELECT_PIECE', payload: pieceId });
+      }
       network.networkSelectPiece(
         game.state.currentTurn,
         pieceId,
@@ -80,9 +90,11 @@ export function useNetworkGame() {
     });
   }, [
     network.isMultiplayer,
+    network.isHost,
     game.state.currentTurn,
     game.state.diceValue,
     game.selectPiece,
+    game.dispatch,
     network.networkSelectPiece,
     _canAct,
     _sendAction,
@@ -99,12 +111,17 @@ export function useNetworkGame() {
     lastRequestRef.current = reqId;
 
     _sendAction(() => {
+      if (!network.isHost) {
+        game.dispatch({ type: 'END_TURN' });
+      }
       network.networkEndTurn(game.state.currentTurn, reqId);
     });
   }, [
     network.isMultiplayer,
+    network.isHost,
     game.state.currentTurn,
     game.endTurn,
+    game.dispatch,
     network.networkEndTurn,
     _canAct,
     _sendAction,

@@ -2,10 +2,10 @@ import {
   calculateMoves, executeMove, checkWinner, getNextPlayer,
   rollDice, createInitialPlayers, isGameOver, getRankings,
   resetDiceSeed,
-} from './gameUtils';
+} from './gameUtils.js';
 import {
   GAME_PHASES, GAME_STATUS, MAX_CONSECUTIVE_SIXES, STORAGE_KEY,
-} from '../data/constants';
+} from '../data/constants.js';
 
 const createInitialState = () => ({
   players: {},
@@ -50,7 +50,9 @@ export function gameReducer(state, action) {
       if (state.gamePhase !== GAME_PHASES.ROLLING) return state;
       if (state.diceRolling) return state;
 
-      const diceValue = rollDice();
+      const diceValue = (action.payload && typeof action.payload.value === 'number')
+        ? action.payload.value
+        : rollDice();
       const isSix = diceValue === 6;
       const newConsecutiveSixes = isSix ? state.consecutiveSixes + 1 : 0;
 

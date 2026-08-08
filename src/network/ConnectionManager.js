@@ -1,133 +1,135 @@
-import { joinRoom, selfId } from '@trystero-p2p/mqtt';
-import { APP_NAME, HEARTBEAT_INTERVAL_MS } from './NetworkConstants';
-import { MESSAGE_TYPES } from './NetworkMessages';
+import mqtt from 'mqtt';
+import { APP_NAME, HEARTBEAT_INTERVAL_MS } from './NetworkConstants.js';
+import { MESSAGE_TYPES } from './NetworkMessages.js';
 
 const STALE_PEER_CHECK_MS = 5000;
 const STALE_PEER_TIMEOUT_MS = 45000;
 
-// Minimal STUN + TURN for fast real-world NAT traversal.
-// Trickle ICE streams candidates as they're found, so fewer servers
-// means the first host-candidate offer goes out sooner. TURN remains
-// as a fallback for symmetric NAT / strict firewalls.
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-];
+// Single public MQTT broker used for ALL traffic (signaling + game data).
+// Every peer must connect to the SAME broker so pub/sub topics align.
+// The broker is a real server that both players can always reach, so the
+// connection works across NAT/VPN without any STUN/TURN or WebRTC.
+const MQTT_URL = 'wss://broker.emqx.io:8084/mqtt';
 
-const RELAY_CONFIG = {
-  // Use public MQTT brokers for fast, push-based signaling.
-  // Public free brokers (EmQX/HiveMQ/Mosquitto) relay SDP instantly —
-  // no announce polling like the torrent trackers.
-  urls: [
-    'wss://broker.emqx.io:8084/mqtt',
-    'wss://broker.hivemq.com:8884/mqtt',
-    'wss://broker-cn.emqx.io:8084/mqtt',
-  ],
-  redundancy: 3,
-};
+function makePeerId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const bytes = new Uint32Array(20);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 20; i++) bytes[i] = Math.floor(Math.random() * 4294967296);
+  }
+  let id = '';
+  for (let i = 0; i < 20; i++) id += chars[bytes[i] % chars.length];
+  return id;
+}
 
 export class ConnectionManager {
   constructor() {
-    this.room = null;
-    this.actions = {};
+    this.client = null;
+    this.roomCode = null;
     this.peerIds = [];
-    this.peerConnections = {};
-    this.heartbeatTimers = {};
     this.isActive = false;
-    this.myPeerId = null;
+    this.myPeerId = makePeerId();
     this.onPeersChange = null;
     this._lastSeen = {};
     this._messageListeners = {};
     this._staleCheckTimer = null;
+    this._heartbeatTimer = null;
+  }
+
+  _topic(roomCode) {
+    return `ludo/${APP_NAME}/${roomCode}`;
+  }
+
+  _broadcastTopic() {
+    return `${this._topic(this.roomCode)}/broadcast`;
+  }
+
+  _peerTopic(peerId) {
+    return `${this._topic(this.roomCode)}/peer/${peerId}`;
   }
 
   createOrJoinRoom(roomCode) {
-    if (this.room) this.leaveRoom();
-
-    console.log('[Ludo] Creating room:', roomCode, 'selfId:', selfId);
-    this.room = joinRoom(
-      {
-        appId: APP_NAME,
-        trickleIce: true,
-        rtcConfig: {
-          iceServers: ICE_SERVERS,
-        },
-        relayConfig: RELAY_CONFIG,
-      },
-      roomCode,
-      {
-        onJoinError: (details) => {
-          console.warn('[Ludo][Trystero] join error:', details);
-        },
-      }
-    );
-    this.myPeerId = selfId;
+    if (this.client) this.leaveRoom();
+    this.roomCode = roomCode;
     this.isActive = true;
 
-    console.log('[Ludo] Room created, setting up actions/peers');
-    this._setupActions();
-    this._setupPeersListener();
-    this._setupHeartbeat();
-    this._startStalePeerCheck();
-    console.log('[Ludo] Room setup complete, active peers:', Object.keys(this.room.getPeers()));
+    console.log('[Ludo] Joining MQTT room:', roomCode, 'peerId:', this.myPeerId);
+    this.client = mqtt.connect(MQTT_URL, {
+      clean: true,
+      keepalive: 30,
+      reconnectPeriod: 2000,
+      connectTimeout: 15000,
+      clientId: `ludo_${this.myPeerId}`,
+    });
+
+    this.client.on('connect', () => {
+      console.log('[Ludo][MQTT] connected, subscribing room:', roomCode);
+      if (!this.client) return;
+      this.client.subscribe(this._broadcastTopic());
+      this.client.subscribe(this._peerTopic(this.myPeerId));
+      this._setupHeartbeat();
+      this._startStalePeerCheck();
+      this.sendToAll(MESSAGE_TYPES.HEARTBEAT, { timestamp: Date.now() });
+    });
+
+    this.client.on('message', (_topic, payload) => {
+      this._handleMessage(payload);
+    });
+
+    this.client.on('error', (err) => {
+      console.warn('[Ludo][MQTT] error:', err && err.message ? err.message : err);
+    });
+
+    this.client.on('offline', () => {
+      console.warn('[Ludo][MQTT] offline');
+    });
+
+    this.client.on('reconnect', () => {
+      console.log('[Ludo][MQTT] reconnecting...');
+    });
 
     return this.myPeerId;
   }
 
-  _setupActions() {
-    for (const name of Object.values(MESSAGE_TYPES)) {
-      const action = this.room.makeAction(name);
-      this.actions[name] = action;
+  _handleMessage(payload) {
+    if (!this.isActive) return;
+    let msg;
+    try {
+      msg = JSON.parse(payload.toString());
+    } catch {
+      return;
     }
-  }
+    const sender = msg.sender;
+    if (!sender || sender === this.myPeerId) return;
 
-  _setupPeersListener() {
-    this.room.onPeerJoin = (peerId) => {
-      this._lastSeen[peerId] = Date.now();
-      const peers = Object.keys(this.room.getPeers());
-      console.log('[Ludo] Peer joined:', peerId, 'total peers:', peers.length, 'all:', peers);
-      this.peerIds = peers;
-      if (this.onPeersChange) {
-        console.log('[Ludo] Calling onPeersChange with:', this.peerIds);
-        this.onPeersChange([...this.peerIds]);
-      } else {
-        console.log('[Ludo] onPeersChange is NOT SET - event lost!');
-      }
-    };
+    this._lastSeen[sender] = Date.now();
 
-    this.room.onPeerLeave = (peerId) => {
-      delete this._lastSeen[peerId];
-      const peers = Object.keys(this.room.getPeers());
-      console.log('[Ludo] Peer left:', peerId, 'remaining:', peers);
-      this.peerIds = peers;
+    if (!this.peerIds.includes(sender)) {
+      console.log('[Ludo] Peer detected:', sender);
+      this.peerIds.push(sender);
       if (this.onPeersChange) this.onPeersChange([...this.peerIds]);
-    };
+    }
+
+    const cb = this._messageListeners[msg.type];
+    if (cb) cb(msg.data, sender);
   }
 
   _setupHeartbeat() {
-    // Refresh last-seen on every incoming heartbeat so the stale-peer
-    // check never drops a live peer. Without this listener, heartbeats
-    // are sent but never handled, and _lastSeen goes stale.
-    this.onMessageType(MESSAGE_TYPES.HEARTBEAT, () => {
-      // last-seen bookkeeping is handled by onMessageType's wrapper
-    });
-
-    const interval = setInterval(() => {
-      if (!this.isActive) {
-        clearInterval(interval);
-        return;
-      }
-      const action = this.actions[MESSAGE_TYPES.HEARTBEAT];
-      if (action) action.send({ timestamp: Date.now() });
+    if (this._heartbeatTimer) {
+      clearInterval(this._heartbeatTimer);
+    }
+    this._heartbeatTimer = setInterval(() => {
+      if (!this.isActive || !this.client || !this.client.connected) return;
+      this.sendToAll(MESSAGE_TYPES.HEARTBEAT, { timestamp: Date.now() });
     }, HEARTBEAT_INTERVAL_MS);
   }
 
   _startStalePeerCheck() {
+    if (this._staleCheckTimer) {
+      clearInterval(this._staleCheckTimer);
+    }
     this._staleCheckTimer = setInterval(() => {
       if (!this.isActive) {
         clearInterval(this._staleCheckTimer);
@@ -139,7 +141,7 @@ export class ConnectionManager {
         if (peerId === this.myPeerId) continue;
         const lastSeen = this._lastSeen[peerId] || 0;
         if (now - lastSeen > STALE_PEER_TIMEOUT_MS) {
-          console.log(`[Ludo] Peer ${peerId} stale (last seen ${now - lastSeen}ms ago), forcing leave`);
+          console.log(`[Ludo] Peer ${peerId} stale (last seen ${now - lastSeen}ms ago), removing`);
           delete this._lastSeen[peerId];
           this.peerIds = this.peerIds.filter(p => p !== peerId);
           if (this.onPeersChange) this.onPeersChange([...this.peerIds]);
@@ -149,35 +151,25 @@ export class ConnectionManager {
   }
 
   sendToPeer(messageType, data, peerId) {
-    const action = this.actions[messageType];
-    if (!action) return;
-    action.send(data, { target: peerId });
+    if (!this.client || !this.client.connected) return;
+    const topic = this._peerTopic(peerId);
+    this.client.publish(topic, JSON.stringify({ type: messageType, data, sender: this.myPeerId }), { qos: 1 });
   }
 
   sendToAll(messageType, data) {
-    const action = this.actions[messageType];
-    if (!action) return;
-    action.send(data);
+    if (!this.client || !this.client.connected) return;
+    const topic = this._broadcastTopic();
+    this.client.publish(topic, JSON.stringify({ type: messageType, data, sender: this.myPeerId }), { qos: 1 });
   }
 
   sendToHost(data) {
     const hostId = this.getHostPeerId();
-    if (!hostId) return;
-    if (hostId === this.myPeerId) return;
-    const action = this.actions[MESSAGE_TYPES.ROLL_REQUEST];
-    if (action) action.send(data, { target: hostId });
+    if (!hostId || hostId === this.myPeerId) return;
+    this.sendToPeer(MESSAGE_TYPES.ROLL_REQUEST, data, hostId);
   }
 
   onMessageType(messageType, callback) {
-    const action = this.actions[messageType];
-    if (!action) return;
     this._messageListeners[messageType] = callback;
-    action.onMessage = (data, { peerId }) => {
-      if (peerId && peerId !== this.myPeerId) {
-        this._lastSeen[peerId] = Date.now();
-      }
-      callback(data, peerId);
-    };
   }
 
   getHostPeerId() {
@@ -197,20 +189,23 @@ export class ConnectionManager {
 
   leaveRoom() {
     this.isActive = false;
-    this.actions = {};
+    this.peerIds = [];
     this._lastSeen = {};
     this._messageListeners = {};
     if (this._staleCheckTimer) {
       clearInterval(this._staleCheckTimer);
       this._staleCheckTimer = null;
     }
-    if (this.room) {
-      try {
-        this.room.leave();
-      } catch (e) { /* ignore */ }
+    if (this._heartbeatTimer) {
+      clearInterval(this._heartbeatTimer);
+      this._heartbeatTimer = null;
     }
-    this.room = null;
-    this.peerIds = [];
-    this.peerConnections = {};
+    if (this.client) {
+      try {
+        this.client.end(true);
+      } catch { /* ignore */ }
+    }
+    this.client = null;
+    this.roomCode = null;
   }
 }

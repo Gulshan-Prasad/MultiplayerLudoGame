@@ -254,7 +254,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     syncRef.current.startGame(playerConfigs);
   }, [networkRole]);
 
-  const networkRollDice = useCallback((playerId) => {
+  const networkRollDice = useCallback((playerId, diceValue) => {
     if (!connRef.current || !syncRef.current) return;
     if (networkRole === NETWORK_ROLE.HOST) {
       const state = syncRef.current.getState();
@@ -262,9 +262,9 @@ export function NetworkProvider({ children, onGameStateReceived }) {
         setNetworkError('Cannot roll right now');
         return;
       }
-      syncRef.current._handleRollRequest({ playerId }, connRef.current.myPeerId);
+      syncRef.current._handleRollRequest({ playerId, diceValue }, connRef.current.myPeerId);
     } else {
-      connRef.current.sendToPeer(MESSAGE_TYPES.ROLL_REQUEST, { playerId }, hostPeerIdRef.current);
+      connRef.current.sendToPeer(MESSAGE_TYPES.ROLL_REQUEST, { playerId, diceValue }, hostPeerIdRef.current);
     }
   }, [networkRole]);
 

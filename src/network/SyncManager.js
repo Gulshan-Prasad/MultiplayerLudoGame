@@ -1,11 +1,11 @@
-import { MESSAGE_TYPES, ERROR_CODES } from './NetworkMessages';
-import { serializeGameState } from './GameSerializer';
+import { MESSAGE_TYPES, ERROR_CODES } from './NetworkMessages.js';
+import { serializeGameState } from './GameSerializer.js';
 import {
   calculateMoves, executeMove, checkWinner, getNextPlayer,
   isGameOver, getRankings, rollDice,
   resetDiceSeed,
-} from '../logic/gameUtils';
-import { GAME_PHASES, GAME_STATUS, MAX_CONSECUTIVE_SIXES, TURN_TIMER_SECONDS } from '../data/constants';
+} from '../logic/gameUtils.js';
+import { GAME_PHASES, GAME_STATUS, MAX_CONSECUTIVE_SIXES, TURN_TIMER_SECONDS } from '../data/constants.js';
 
 export class SyncManager {
   constructor(connectionManager) {
@@ -266,7 +266,7 @@ export class SyncManager {
       return;
     }
 
-    const diceValue = rollDice();
+    const diceValue = (data.diceValue >= 1 && data.diceValue <= 6) ? data.diceValue : rollDice();
     const isSix = diceValue === 6;
     const newSixCount = isSix ? state.consecutiveSixes + 1 : 0;
 

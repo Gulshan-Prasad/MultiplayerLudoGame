@@ -7,7 +7,7 @@ export function serializeGameState(state) {
     gamePhase: state.gamePhase,
     gameStatus: state.gameStatus,
     winner: state.winner,
-    moveHistory: state.moveHistory.slice(0, 20),
+    moveHistory: state.moveHistory.slice(0, 50),
     consecutiveSixes: state.consecutiveSixes,
     lastMove: state.lastMove,
     turnNumber: state.turnNumber,

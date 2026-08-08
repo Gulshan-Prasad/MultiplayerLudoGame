@@ -1,5 +1,5 @@
-import { PER_PLAYER_PATHS, SAFE_SPOT_COORDS } from '../data/boardData';
-import { PIECES_PER_PLAYER } from '../data/constants';
+import { PER_PLAYER_PATHS, SAFE_SPOT_COORDS } from '../data/boardData.js';
+import { PIECES_PER_PLAYER } from '../data/constants.js';
 
 export const MAIN_PATH_LENGTH = 51;
 export const FINISH_POS = 56;
