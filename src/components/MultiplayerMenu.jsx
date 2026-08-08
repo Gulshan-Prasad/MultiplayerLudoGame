@@ -4,7 +4,7 @@ import { useNetwork } from '../network/useNetwork';
 
 function MultiplayerMenu() {
   const navigate = useNavigate();
-  const { createRoom, joinRoom, connectionStatus } = useNetwork();
+  const { createRoom, joinRoom, connectionStatus, networkError } = useNetwork();
   const [mode, setMode] = useState(null);
   const [playerName, setPlayerName] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -147,6 +147,12 @@ function MultiplayerMenu() {
         {error && (
           <div className="text-red-300 text-sm text-center bg-red-500/10 border border-red-500/20 p-2 rounded-lg">
             {error}
+          </div>
+        )}
+
+        {networkError && (
+          <div className="text-red-300 text-sm text-center bg-red-500/10 border border-red-500/20 p-2 rounded-lg">
+            {networkError}
           </div>
         )}
 

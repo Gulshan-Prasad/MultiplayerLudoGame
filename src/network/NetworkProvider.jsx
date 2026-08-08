@@ -25,6 +25,14 @@ export function NetworkProvider({ children, onGameStateReceived }) {
   const lobbyRef = useRef(null);
   const hostPeerIdRef = useRef(null);
   const networkRoleRef = useRef(NETWORK_ROLE.NONE);
+  const joinRetryTimerRef = useRef(null);
+
+  const _stopJoinRetry = useCallback(() => {
+    if (joinRetryTimerRef.current) {
+      clearInterval(joinRetryTimerRef.current);
+      joinRetryTimerRef.current = null;
+    }
+  }, []);
 
   const _setupConnection = useCallback((roomCodeVal, playerName) => {
     playerNameRef.current = playerName;
@@ -84,6 +92,20 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     playerIdRef.current = peerId;
     setConnectionStatus(CONNECTION_STATUS.CONNECTING);
 
+    connRef.current.onStatusChange = (status) => {
+      if (status === 'connected') {
+        setConnectionStatus(CONNECTION_STATUS.CONNECTED);
+      } else if (status === 'offline' || status === 'reconnecting') {
+        setConnectionStatus(CONNECTION_STATUS.RECONNECTING);
+      }
+    };
+
+    connRef.current.onConnectionFailed = (msg) => {
+      console.error('[Ludo] Connection to game server failed:', msg);
+      setNetworkError(msg || 'Failed to connect to the game server. Check your internet connection and try again.');
+      setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
+    };
+
     if (!syncRef.current) {
       syncRef.current = new SyncManager(connRef.current);
     }
@@ -95,17 +117,17 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     syncRef.current.setupListeners();
 
     connRef.current.onMessageType(MESSAGE_TYPES.JOIN_ROOM, (data, pId) => {
-      console.log('[Ludo] Received JOIN_ROOM from:', pId, 'lobbyRef:', lobbyRef.current);
+      console.log('[Ludo] Received JOIN_ROOM from:', pId.slice(0, 8) + '...', 'lobbyRef ready:', !!lobbyRef.current);
       const currentLobby = lobbyRef.current;
       if (!currentLobby) {
-        console.log('[Ludo] Lobby not ready yet, deferring');
+        console.warn('[Ludo] Lobby not ready yet, deferring join (client will retry)');
         return;
       }
       const updated = addPlayerToLobby(currentLobby, data.player);
       if (updated !== currentLobby) {
         lobbyRef.current = updated;
         setLobby(updated);
-        console.log('[Ludo] Sending ROOM_INFO to:', pId);
+        console.log('[Ludo] Player added to lobby:', data.player.name, 'total:', updated.players.length, '- sending ROOM_INFO to:', pId.slice(0, 8) + '...');
         connRef.current?.sendToPeer(MESSAGE_TYPES.ROOM_INFO, { lobby: updated }, pId);
       } else {
         console.log('[Ludo] Player already in lobby, no update needed');
@@ -135,7 +157,8 @@ export function NetworkProvider({ children, onGameStateReceived }) {
 
     connRef.current.onMessageType(MESSAGE_TYPES.ROOM_INFO, (data, _pId) => {
       if (data.lobby) {
-        console.log('[Ludo] Received ROOM_INFO, setting lobby:', data.lobby);
+        console.log('[Ludo] Received ROOM_INFO, lobby players:', data.lobby.players?.length, 'hostId:', data.lobby.hostId?.slice(0, 8) + '...');
+        _stopJoinRetry();
         if (data.lobby.hostId) hostPeerIdRef.current = data.lobby.hostId;
         setLobby(data.lobby);
       }
@@ -144,6 +167,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     connRef.current.onMessageType(MESSAGE_TYPES.GAME_STATE_SYNC, (data, _pId) => {
       if (data.state && onGameStateReceived) {
         const deserialized = deserializeGameState(data.state);
+        console.log('[Ludo] GAME_STATE_SYNC received (phase:', deserialized.gamePhase, ', sequence:', data.sequence || 0, ')');
         onGameStateReceived({ ...deserialized, sequence: data.sequence || 0 });
       }
     });
@@ -172,11 +196,12 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     });
 
     return { peerId, isHost: connRef.current.isHost() };
-  }, [onGameStateReceived]);
+  }, [onGameStateReceived, _stopJoinRetry]);
 
   const createRoom = useCallback((playerName, maxPlayers) => {
     const code = generateRoomCode();
     networkRoleRef.current = NETWORK_ROLE.HOST;
+    console.log(`[Ludo] Creating room ${code} as HOST (maxPlayers=${maxPlayers})`);
     const { peerId } = _setupConnection(code, playerName);
 
     hostPeerIdRef.current = peerId;
@@ -208,15 +233,38 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     }
 
     networkRoleRef.current = NETWORK_ROLE.CLIENT;
+    console.log(`[Ludo] Joining room ${code} as CLIENT`);
     _setupConnection(code, playerName);
     setRoomCode(code);
     setNetworkRole(NETWORK_ROLE.CLIENT);
     setIsMultiplayer(true);
 
+    // Keep re-announcing until the host confirms with ROOM_INFO (lobby set).
+    // The host drops JOIN_ROOM if its lobby isn't ready yet, so retry is needed.
+    _stopJoinRetry();
+    joinRetryTimerRef.current = setInterval(() => {
+      if (!lobbyRef.current && connRef.current && networkRoleRef.current === NETWORK_ROLE.CLIENT) {
+        console.log('[Ludo] Re-sending JOIN_ROOM (lobby not received yet)');
+        connRef.current.sendToAll(MESSAGE_TYPES.JOIN_ROOM, {
+          player: {
+            id: playerIdRef.current,
+            name: playerNameRef.current,
+            color: null,
+            isReady: false,
+            isHost: false,
+            isConnected: true,
+          },
+        });
+      } else {
+        _stopJoinRetry();
+      }
+    }, 3000);
+
     return true;
-  }, [_setupConnection]);
+  }, [_setupConnection, _stopJoinRetry]);
 
   const leaveRoom = useCallback(() => {
+    _stopJoinRetry();
     if (connRef.current) {
       connRef.current.sendToAll(MESSAGE_TYPES.LEAVE_ROOM, {
         playerId: playerIdRef.current,
@@ -232,7 +280,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     setIsMultiplayer(false);
     setPeerIds([]);
     setChatMessages([]);
-  }, []);
+  }, [_stopJoinRetry]);
 
   const toggleReady = useCallback(() => {
     if (!lobby || !playerIdRef.current) return;

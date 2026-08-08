@@ -1,15 +1,10 @@
 import mqtt from 'mqtt';
 import { APP_NAME, HEARTBEAT_INTERVAL_MS } from './NetworkConstants.js';
 import { MESSAGE_TYPES } from './NetworkMessages.js';
+import { CONNECT_FAILURES_BEFORE_NOTIFY, getBrokerForRoom } from './NetworkConfig.js';
 
 const STALE_PEER_CHECK_MS = 5000;
 const STALE_PEER_TIMEOUT_MS = 45000;
-
-// Single public MQTT broker used for ALL traffic (signaling + game data).
-// Every peer must connect to the SAME broker so pub/sub topics align.
-// The broker is a real server that both players can always reach, so the
-// connection works across NAT/VPN without any STUN/TURN or WebRTC.
-const MQTT_URL = 'wss://broker.emqx.io:8084/mqtt';
 
 function makePeerId() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -32,10 +27,18 @@ export class ConnectionManager {
     this.isActive = false;
     this.myPeerId = makePeerId();
     this.onPeersChange = null;
+    this.onStatusChange = null;
+    this.onConnectionFailed = null;
     this._lastSeen = {};
     this._messageListeners = {};
     this._staleCheckTimer = null;
     this._heartbeatTimer = null;
+    this._connectFailures = 0;
+    this._failureNotified = false;
+  }
+
+  _log(...args) {
+    console.log(`[Ludo][MQTT]`, ...args);
   }
 
   _topic(roomCode) {
@@ -54,43 +57,88 @@ export class ConnectionManager {
     if (this.client) this.leaveRoom();
     this.roomCode = roomCode;
     this.isActive = true;
+    this._connectFailures = 0;
+    this._failureNotified = false;
 
-    console.log('[Ludo] Joining MQTT room:', roomCode, 'peerId:', this.myPeerId);
-    this.client = mqtt.connect(MQTT_URL, {
+    const broker = getBrokerForRoom(roomCode);
+    this._log(`joining room ${roomCode}, peerId=${this.myPeerId}, broker=${broker.url}`);
+    this._startMqtt();
+
+    return this.myPeerId;
+  }
+
+  _startMqtt() {
+    if (!this.isActive) return;
+    const broker = getBrokerForRoom(this.roomCode);
+    const url = broker.url;
+
+    const options = {
       clean: true,
       keepalive: 30,
       reconnectPeriod: 2000,
-      connectTimeout: 15000,
+      connectTimeout: 20000,
       clientId: `ludo_${this.myPeerId}`,
-    });
+    };
+    if (broker.username) options.username = broker.username;
+    if (broker.password) options.password = broker.password;
+
+    this._log(`connecting to broker ${url}`);
+    this.client = mqtt.connect(url, options);
 
     this.client.on('connect', () => {
-      console.log('[Ludo][MQTT] connected, subscribing room:', roomCode);
+      this._connectFailures = 0;
+      this._failureNotified = false;
+      this._log(`connected to ${url}`);
       if (!this.client) return;
-      this.client.subscribe(this._broadcastTopic());
-      this.client.subscribe(this._peerTopic(this.myPeerId));
+      const subOpts = { qos: 1 };
+      this.client.subscribe(this._broadcastTopic(), subOpts, (err) => {
+        if (err) console.warn(`[Ludo][MQTT] subscribe broadcast failed:`, err);
+        else this._log(`subscribed to ${this._broadcastTopic()}`);
+      });
+      this.client.subscribe(this._peerTopic(this.myPeerId), subOpts, (err) => {
+        if (err) console.warn(`[Ludo][MQTT] subscribe peer failed:`, err);
+        else this._log(`subscribed to ${this._peerTopic(this.myPeerId)}`);
+      });
       this._setupHeartbeat();
       this._startStalePeerCheck();
       this.sendToAll(MESSAGE_TYPES.HEARTBEAT, { timestamp: Date.now() });
+      this.onStatusChange?.('connected');
     });
 
     this.client.on('message', (_topic, payload) => {
       this._handleMessage(payload);
     });
 
-    this.client.on('error', (err) => {
-      console.warn('[Ludo][MQTT] error:', err && err.message ? err.message : err);
-    });
+    this.client.on('error', (err) => this._handleMqttError(err, url));
 
     this.client.on('offline', () => {
-      console.warn('[Ludo][MQTT] offline');
+      this._log(`broker offline (${url})`);
+      this.onStatusChange?.('offline');
     });
 
     this.client.on('reconnect', () => {
-      console.log('[Ludo][MQTT] reconnecting...');
+      this._log(`reconnecting to ${url}...`);
+      this.onStatusChange?.('reconnecting');
     });
 
-    return this.myPeerId;
+    this.client.on('close', () => {
+      this._log(`connection closed (${url})`);
+    });
+  }
+
+  _handleMqttError(err, url) {
+    this._connectFailures++;
+    const msg = err && err.message ? err.message : String(err);
+    console.warn(`[Ludo][MQTT] error on ${url} (attempt ${this._connectFailures}):`, msg);
+    if (this.client && this.client.connected) return;
+    if (this._connectFailures >= CONNECT_FAILURES_BEFORE_NOTIFY && !this._failureNotified) {
+      this._failureNotified = true;
+      console.error(`[Ludo][MQTT] unable to reach broker ${url} after ${this._connectFailures} attempts: ${msg}`);
+      this.onStatusChange?.('offline');
+      if (this.onConnectionFailed) {
+        this.onConnectionFailed(`Could not reach the game server (${url}). Check your internet connection. (${msg})`);
+      }
+    }
   }
 
   _handleMessage(payload) {
@@ -104,10 +152,14 @@ export class ConnectionManager {
     const sender = msg.sender;
     if (!sender || sender === this.myPeerId) return;
 
+    if (msg.type !== MESSAGE_TYPES.HEARTBEAT) {
+      this._log(`recv [${msg.type}] from ${sender.slice(0, 8)}...`);
+    }
+
     this._lastSeen[sender] = Date.now();
 
     if (!this.peerIds.includes(sender)) {
-      console.log('[Ludo] Peer detected:', sender);
+      this._log(`peer detected: ${sender.slice(0, 8)}... (total peers: ${this.peerIds.length + 1})`);
       this.peerIds.push(sender);
       if (this.onPeersChange) this.onPeersChange([...this.peerIds]);
     }
@@ -141,7 +193,7 @@ export class ConnectionManager {
         if (peerId === this.myPeerId) continue;
         const lastSeen = this._lastSeen[peerId] || 0;
         if (now - lastSeen > STALE_PEER_TIMEOUT_MS) {
-          console.log(`[Ludo] Peer ${peerId} stale (last seen ${now - lastSeen}ms ago), removing`);
+          this._log(`peer stale (last seen ${now - lastSeen}ms ago), removing: ${peerId.slice(0, 8)}...`);
           delete this._lastSeen[peerId];
           this.peerIds = this.peerIds.filter(p => p !== peerId);
           if (this.onPeersChange) this.onPeersChange([...this.peerIds]);
@@ -151,13 +203,25 @@ export class ConnectionManager {
   }
 
   sendToPeer(messageType, data, peerId) {
-    if (!this.client || !this.client.connected) return;
+    if (!this.client || !this.client.connected) {
+      console.warn(`[Ludo][MQTT] sendToPeer(${messageType}) skipped - not connected`);
+      return;
+    }
     const topic = this._peerTopic(peerId);
+    this._log(`send [${messageType}] -> ${peerId.slice(0, 8)}...`);
     this.client.publish(topic, JSON.stringify({ type: messageType, data, sender: this.myPeerId }), { qos: 1 });
   }
 
   sendToAll(messageType, data) {
-    if (!this.client || !this.client.connected) return;
+    if (!this.client || !this.client.connected) {
+      if (messageType !== MESSAGE_TYPES.HEARTBEAT) {
+        console.warn(`[Ludo][MQTT] sendToAll(${messageType}) skipped - not connected`);
+      }
+      return;
+    }
+    if (messageType !== MESSAGE_TYPES.HEARTBEAT) {
+      this._log(`send [${messageType}] -> broadcast`);
+    }
     const topic = this._broadcastTopic();
     this.client.publish(topic, JSON.stringify({ type: messageType, data, sender: this.myPeerId }), { qos: 1 });
   }
