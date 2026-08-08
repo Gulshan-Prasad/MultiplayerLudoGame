@@ -44,15 +44,15 @@ function MultiplayerGameContent() {
   const showPenalty = consecutiveSixes >= 3 && gamePhase === GAME_PHASES.TURN_COMPLETE;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 md:p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-1 sm:p-2 md:p-4">
       <WinnerModal />
 
       <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1 flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2 justify-center">
+        <div className="flex flex-col lg:flex-row gap-2 sm:gap-4">
+          <div className="flex-1 flex flex-col gap-2 sm:gap-4">
+            <div className="flex flex-wrap gap-1 sm:gap-2 justify-center">
               {playerEntries.map(([pid, player]) => (
-                <div key={pid} className="flex-1 min-w-[140px] max-w-[200px]">
+                <div key={pid} className="flex-1 min-w-[100px] sm:min-w-[140px] max-w-[160px] sm:max-w-[200px]">
                   <PlayerPanel
                     playerId={pid}
                     player={player}
@@ -70,54 +70,54 @@ function MultiplayerGameContent() {
                 {isActivePlayer ? (
                   <button
                     onClick={endTurn}
-                    className="px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold
+                    className="px-6 sm:px-8 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold
                       rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95
-                      transition-all duration-200"
+                      transition-all duration-200 text-sm sm:text-base"
                   >
                     End Turn →
                   </button>
                 ) : (
-                  <div className="px-8 py-3 bg-gray-200 text-gray-500 font-bold rounded-xl shadow">
-                    Waiting for {currentPlayer?.name} to end turn...
+                  <div className="px-6 sm:px-8 py-2 sm:py-3 bg-gray-200 text-gray-500 font-bold rounded-xl shadow text-sm sm:text-base">
+                    Waiting for {currentPlayer?.name}...
                   </div>
                 )}
               </div>
             )}
 
             {gamePhase === GAME_PHASES.GAME_OVER && (
-              <div className="text-center text-lg font-bold text-green-700 bg-green-50 p-3 rounded-lg">
+              <div className="text-center text-sm sm:text-lg font-bold text-green-700 bg-green-50 p-2 sm:p-3 rounded-lg">
                 Game Over! Check rankings.
               </div>
             )}
           </div>
 
-          <div className="w-full lg:w-64 flex flex-col gap-4">
-            <div className="bg-white rounded-xl shadow-md p-4">
+          <div className="w-full lg:w-64 flex flex-col gap-2 sm:gap-4">
+            <div className="bg-white rounded-xl shadow-md p-3 sm:p-4">
               {currentPlayer && (
-                <div className="text-center mb-3">
+                <div className="text-center mb-2 sm:mb-3">
                   <div
-                    className="text-lg font-bold"
+                    className="text-base sm:text-lg font-bold"
                     style={{ color: COLOR_MAP[currentPlayer.color]?.primary }}
                   >
                     {currentPlayer.name}'s Turn
                   </div>
                   {isActivePlayer && (
-                    <div className="text-sm text-gray-500">
+                    <div className="text-xs sm:text-sm text-gray-500">
                       {network.isHost ? '(Host)' : '(Client)'}
                     </div>
                   )}
-                  <div className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-block ${
+                  <div className={`text-[10px] sm:text-xs mt-1 px-2 py-0.5 rounded-full inline-block ${
                     network.connectionStatus === 'connected' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
                   }`}>
                     {network.connectionStatus}
                   </div>
                   {!isActivePlayer && network.isMultiplayer && gamePhase !== GAME_PHASES.GAME_OVER && (
-                    <div className="text-sm text-gray-400 mt-2 animate-pulse">
+                    <div className="text-xs sm:text-sm text-gray-400 mt-2 animate-pulse">
                       Waiting for {currentPlayer?.name}...
                     </div>
                   )}
                   {isActivePlayer && (
-                    <div className="text-sm text-gray-500 mt-1">
+                    <div className="text-xs sm:text-sm text-gray-500 mt-1">
                       {gamePhase === GAME_PHASES.ROLLING && !diceRolling && 'Roll the dice!'}
                       {diceRolling && 'Rolling...'}
                       {gamePhase === GAME_PHASES.SELECTING_PIECE && 'Select a piece to move'}
@@ -129,22 +129,22 @@ function MultiplayerGameContent() {
               )}
 
               {gamePhase !== GAME_PHASES.GAME_OVER && (
-                <div className="flex flex-col items-center gap-3">
+                <div className="flex flex-col items-center gap-2 sm:gap-3">
                   {showPenalty && (
-                    <div className="text-red-600 font-bold text-sm md:text-base animate-bounce bg-red-100 px-3 py-1 rounded-lg">
+                    <div className="text-red-600 font-bold text-xs sm:text-sm md:text-base animate-bounce bg-red-100 px-2 sm:px-3 py-1 rounded-lg text-center">
                       Three 6's! Turn forfeited!
                     </div>
                   )}
 
                   {consecutiveSixes > 0 && consecutiveSixes < 3 && diceValue === 6 && (
-                    <div className="text-green-600 font-bold text-sm bg-green-100 px-3 py-1 rounded-lg animate-pulse">
+                    <div className="text-green-600 font-bold text-xs sm:text-sm bg-green-100 px-2 sm:px-3 py-1 rounded-lg animate-pulse">
                       Roll 6! Bonus turn!
                     </div>
                   )}
 
                   <div
                     className={`
-                      relative w-16 h-16 md:w-20 md:h-20 rounded-xl select-none
+                      relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-xl select-none
                       transition-all duration-300
                       ${gamePhase === GAME_PHASES.ROLLING && !diceRolling && isActivePlayer
                         ? 'cursor-pointer hover:scale-110 hover:shadow-xl active:scale-95'
@@ -171,7 +171,7 @@ function MultiplayerGameContent() {
                   </div>
 
                   {diceValue > 0 && !diceRolling && (
-                    <div className="text-lg font-bold text-gray-700">
+                    <div className="text-sm sm:text-lg font-bold text-gray-700">
                       Rolled: {diceValue}
                     </div>
                   )}
@@ -179,7 +179,7 @@ function MultiplayerGameContent() {
                   {isActivePlayer && gamePhase === GAME_PHASES.ROLLING && !diceRolling && (
                     <button
                       onClick={rollDice}
-                      className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md 
+                      className="px-5 sm:px-6 py-1.5 sm:py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md text-sm sm:text-base
                         hover:bg-blue-700 active:bg-blue-800 transition-all duration-200
                         focus:outline-none focus:ring-4 focus:ring-blue-300"
                     >
@@ -188,10 +188,10 @@ function MultiplayerGameContent() {
                   )}
 
                   {gamePhase === GAME_PHASES.SELECTING_PIECE && diceValue > 0 && (
-                    <div className="text-xs font-semibold text-gray-600 text-center">
+                    <div className="text-[10px] sm:text-xs font-semibold text-gray-600 text-center">
                       {isActivePlayer
-                        ? `Click a piece on the board to move (dice: ${diceValue})`
-                        : `${currentPlayer?.name} is selecting a piece...`
+                        ? `Click a piece to move (dice: ${diceValue})`
+                        : `${currentPlayer?.name} is selecting...`
                       }
                     </div>
                   )}
@@ -199,14 +199,14 @@ function MultiplayerGameContent() {
               )}
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-4">
-              <h3 className="text-sm font-bold text-gray-700 mb-2">Move History</h3>
+            <div className="bg-white rounded-xl shadow-md p-3 sm:p-4">
+              <h3 className="text-xs sm:text-sm font-bold text-gray-700 mb-1 sm:mb-2">Move History</h3>
               <GameHistory moveHistory={moveHistory} players={players} />
             </div>
 
             <button
               onClick={() => { network.leaveRoom(); navigate('/'); }}
-              className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold text-sm rounded-lg transition-all"
+              className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold text-xs sm:text-sm rounded-lg transition-all"
             >
               Leave Game
             </button>
@@ -227,15 +227,15 @@ function LocalGameContent() {
   const currentPlayer = players[currentTurn];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 md:p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-1 sm:p-2 md:p-4">
       <WinnerModal />
 
       <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1 flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2 justify-center">
+        <div className="flex flex-col lg:flex-row gap-2 sm:gap-4">
+          <div className="flex-1 flex flex-col gap-2 sm:gap-4">
+            <div className="flex flex-wrap gap-1 sm:gap-2 justify-center">
               {playerEntries.map(([pid, player]) => (
-                <div key={pid} className="flex-1 min-w-[140px] max-w-[200px]">
+                <div key={pid} className="flex-1 min-w-[100px] sm:min-w-[140px] max-w-[160px] sm:max-w-[200px]">
                   <PlayerPanel
                     playerId={pid}
                     player={player}
@@ -251,9 +251,9 @@ function LocalGameContent() {
               <div className="flex justify-center">
                 <button
                   onClick={endTurn}
-                  className="px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold
+                  className="px-6 sm:px-8 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold
                     rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95
-                    transition-all duration-200"
+                    transition-all duration-200 text-sm sm:text-base"
                 >
                   End Turn →
                 </button>
@@ -261,23 +261,23 @@ function LocalGameContent() {
             )}
 
             {gamePhase === GAME_PHASES.GAME_OVER && (
-              <div className="text-center text-lg font-bold text-green-700 bg-green-50 p-3 rounded-lg">
+              <div className="text-center text-sm sm:text-lg font-bold text-green-700 bg-green-50 p-2 sm:p-3 rounded-lg">
                 Game Over! Check rankings.
               </div>
             )}
           </div>
 
-          <div className="w-full lg:w-64 flex flex-col gap-4">
-            <div className="bg-white rounded-xl shadow-md p-4">
+          <div className="w-full lg:w-64 flex flex-col gap-2 sm:gap-4">
+            <div className="bg-white rounded-xl shadow-md p-3 sm:p-4">
               {currentPlayer && (
-                <div className="text-center mb-3">
+                <div className="text-center mb-2 sm:mb-3">
                   <div
-                    className="text-lg font-bold"
+                    className="text-base sm:text-lg font-bold"
                     style={{ color: COLOR_MAP[currentPlayer.color]?.primary }}
                   >
                     {currentPlayer.name}'s Turn
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-xs sm:text-sm text-gray-500">
                     {gamePhase === GAME_PHASES.ROLLING && !diceRolling && 'Roll the dice!'}
                     {diceRolling && 'Rolling...'}
                     {gamePhase === GAME_PHASES.SELECTING_PIECE && 'Select a piece to move'}
@@ -291,33 +291,33 @@ function LocalGameContent() {
               {gamePhase !== GAME_PHASES.GAME_OVER && <Dice />}
 
               {gamePhase === GAME_PHASES.SELECTING_PIECE && diceValue > 0 && (
-                <div className="mt-3 space-y-1">
-                  <div className="text-xs font-semibold text-gray-600 text-center">
+                <div className="mt-2 sm:mt-3 space-y-1">
+                  <div className="text-[10px] sm:text-xs font-semibold text-gray-600 text-center">
                     Click a piece on the board to move (dice: {diceValue})
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-4">
-              <h3 className="text-sm font-bold text-gray-700 mb-2">Move History</h3>
+            <div className="bg-white rounded-xl shadow-md p-3 sm:p-4">
+              <h3 className="text-xs sm:text-sm font-bold text-gray-700 mb-1 sm:mb-2">Move History</h3>
               <GameHistory moveHistory={moveHistory} players={players} />
             </div>
 
-            <div className="flex gap-2">
-              <button onClick={newGame} className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold text-sm rounded-lg transition-all">
-                New Game
+            <div className="flex flex-wrap gap-1 sm:gap-2">
+              <button onClick={newGame} className="flex-1 min-w-[60px] px-2 sm:px-3 py-1.5 sm:py-2 bg-red-500 hover:bg-red-600 text-white font-semibold text-[10px] sm:text-sm rounded-lg transition-all">
+                New
               </button>
-              <button onClick={saveGame} className="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold text-sm rounded-lg transition-all disabled:opacity-50"
+              <button onClick={saveGame} className="flex-1 min-w-[60px] px-2 sm:px-3 py-1.5 sm:py-2 bg-green-500 hover:bg-green-600 text-white font-semibold text-[10px] sm:text-sm rounded-lg transition-all disabled:opacity-50"
                 disabled={gameStatus !== GAME_STATUS.IN_PROGRESS}>
                 Save
               </button>
               {hasSavedGame && (
-                <button onClick={loadGame} className="flex-1 px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold text-sm rounded-lg transition-all">
+                <button onClick={loadGame} className="flex-1 min-w-[60px] px-2 sm:px-3 py-1.5 sm:py-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold text-[10px] sm:text-sm rounded-lg transition-all">
                   Load
                 </button>
               )}
-              <button onClick={undoMove} className="flex-1 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold text-sm rounded-lg transition-all disabled:opacity-50"
+              <button onClick={undoMove} className="flex-1 min-w-[60px] px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold text-[10px] sm:text-sm rounded-lg transition-all disabled:opacity-50"
                 disabled={moveHistory.length === 0 || gamePhase === 'GAME_OVER'}>
                 Undo
               </button>
@@ -325,7 +325,7 @@ function LocalGameContent() {
 
             <button
               onClick={() => navigate('/')}
-              className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold text-sm rounded-lg transition-all"
+              className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold text-xs sm:text-sm rounded-lg transition-all"
             >
               Main Menu
             </button>

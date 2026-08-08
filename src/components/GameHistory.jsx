@@ -25,7 +25,7 @@ function GameHistory({ moveHistory = [], players = {} }) {
   return (
     <div
       ref={scrollRef}
-      className="max-h-48 overflow-y-auto space-y-1 px-2"
+      className="max-h-24 sm:max-h-32 md:max-h-48 overflow-y-auto space-y-1 px-1 sm:px-2"
     >
       {moveHistory.slice(0, 20).map((move, idx) => {
         const player = players[move.player];

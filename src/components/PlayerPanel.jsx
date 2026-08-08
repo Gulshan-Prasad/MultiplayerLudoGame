@@ -12,7 +12,7 @@ function PieceStatus({ status, color }) {
   if (status === 'home') {
     return (
       <div
-        className="w-5 h-5 md:w-6 md:h-6 rounded-full border-2 border-gray-300 opacity-30"
+        className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 rounded-full border-2 border-gray-300 opacity-30"
         style={{ backgroundColor: '#D1D5DB' }}
       />
     );
@@ -21,7 +21,7 @@ function PieceStatus({ status, color }) {
     <img
       src={PIECE_IMAGES[color]}
       alt=""
-      className={`w-5 h-5 md:w-6 md:h-6 object-contain transition-all duration-300 ${
+      className={`w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 object-contain transition-all duration-300 ${
         status === 'finished' ? 'opacity-50 grayscale' : ''
       }`}
       draggable={false}
@@ -35,7 +35,7 @@ function PlayerPanel({ playerId: _playerId, player, isCurrentTurn, isMe = false 
   return (
     <div
       className={`
-        rounded-xl p-3 md:p-4 transition-all duration-500 border-2
+        rounded-xl p-1.5 sm:p-2 md:p-3 lg:p-4 transition-all duration-500 border-2
         ${isCurrentTurn
           ? 'shadow-lg scale-[1.02]'
           : 'shadow opacity-80'
@@ -47,34 +47,34 @@ function PlayerPanel({ playerId: _playerId, player, isCurrentTurn, isMe = false 
         borderWidth: isCurrentTurn ? '3px' : '1px',
       }}
     >
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
         <img
           src={PIECE_IMAGES[player.color]}
           alt=""
-          className="w-5 h-5 md:w-6 md:h-6 object-contain flex-shrink-0"
+          className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 object-contain flex-shrink-0"
           draggable={false}
         />
-        <span className={`font-bold text-sm md:text-base truncate ${isCurrentTurn ? 'text-gray-900' : 'text-gray-600'}`}>
+        <span className={`font-bold text-[10px] sm:text-xs md:text-sm lg:text-base truncate ${isCurrentTurn ? 'text-gray-900' : 'text-gray-600'}`}>
           {player.name}
         </span>
         {isMe && !isCurrentTurn && (
-          <span className="ml-auto text-xs bg-gray-400 text-white px-2 py-0.5 rounded-full font-bold flex-shrink-0">
+          <span className="ml-auto text-[10px] sm:text-xs bg-gray-400 text-white px-1 sm:px-2 py-0.5 rounded-full font-bold flex-shrink-0">
             You
           </span>
         )}
         {player.isWinner && (
-          <span className="ml-auto text-xs bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded-full font-bold flex-shrink-0">
+          <span className="ml-auto text-[10px] sm:text-xs bg-yellow-400 text-yellow-900 px-1 sm:px-2 py-0.5 rounded-full font-bold flex-shrink-0">
             Won!
           </span>
         )}
         {isCurrentTurn && (
-          <span className="ml-auto text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-bold flex-shrink-0">
+          <span className="ml-auto text-[10px] sm:text-xs bg-blue-500 text-white px-1 sm:px-2 py-0.5 rounded-full font-bold flex-shrink-0">
             {isMe ? 'Your Turn' : "Playing"}
           </span>
         )}
       </div>
 
-      <div className="flex gap-1.5 justify-center">
+      <div className="flex gap-1 sm:gap-1.5 justify-center">
         {player.pieces.map((piece) => {
           let status = 'home';
           if (piece.isFinished) status = 'finished';
@@ -84,7 +84,7 @@ function PlayerPanel({ playerId: _playerId, player, isCurrentTurn, isMe = false 
       </div>
 
       {player.finishedPieces > 0 && (
-        <div className="mt-2 text-center text-xs text-gray-600">
+        <div className="mt-1 sm:mt-2 text-center text-[10px] sm:text-xs text-gray-600">
           Finished: {player.finishedPieces}/4
         </div>
       )}

@@ -38,9 +38,9 @@ function PlayerSlot({ player, playerIndex, isHost, currentPeerId, onToggleReady 
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {!isHost && (
+        {!isHost && isMe && (
           <button
-            onClick={() => onToggleReady?.(player.id)}
+            onClick={() => onToggleReady?.()}
             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
               player.isReady
                 ? 'bg-emerald-500 text-white'
@@ -49,6 +49,13 @@ function PlayerSlot({ player, playerIndex, isHost, currentPeerId, onToggleReady 
           >
             {player.isReady ? 'Ready' : 'Not Ready'}
           </button>
+        )}
+        {!isHost && !isMe && (
+          <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${
+            player.isReady ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-white/50'
+          }`}>
+            {player.isReady ? 'Ready' : 'Not Ready'}
+          </span>
         )}
         {isHost && (
           <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${
@@ -145,6 +152,7 @@ function MultiplayerLobby() {
               isHost={player.isHost}
               currentPeerId={peerIds[0]}
               isMe={player.id === peerIds[0]}
+              onToggleReady={toggleReady}
             />
           ))}
           {Array.from({ length: lobby.maxPlayers - lobby.players.length }).map((_, i) => (

@@ -177,6 +177,14 @@ export function gameReducer(state, action) {
     case 'END_TURN': {
       if (state.gamePhase !== GAME_PHASES.TURN_COMPLETE) return state;
       const nextPlayer = getNextPlayer(state);
+      if (!nextPlayer) {
+        return {
+          ...state,
+          gamePhase: GAME_PHASES.GAME_OVER,
+          gameStatus: GAME_STATUS.FINISHED,
+          rankings: getRankings(state),
+        };
+      }
       return {
         ...state,
         gamePhase: GAME_PHASES.ROLLING,
@@ -246,6 +254,14 @@ export function gameReducer(state, action) {
     case 'TIMEOUT_TURN': {
       if (state.gamePhase !== GAME_PHASES.ROLLING) return state;
       const nextPlayer = getNextPlayer(state);
+      if (!nextPlayer) {
+        return {
+          ...state,
+          gamePhase: GAME_PHASES.GAME_OVER,
+          gameStatus: GAME_STATUS.FINISHED,
+          rankings: getRankings(state),
+        };
+      }
       return {
         ...state,
         currentTurn: nextPlayer,

@@ -17,6 +17,8 @@ npm run preview    # preview production build
 
 Deploy `dist/` to any static host (Vercel, Netlify, Cloudflare Pages, GitHub Pages).
 
+> **Important for online multiplayer:** the app must be served over **HTTPS** (or `localhost`). WebRTC and secure WebSocket signaling are blocked on plain `http://`. Also, some corporate/enterprise networks block WebRTC; the TURN relay (see below) helps in those cases.
+
 ---
 
 ## How to Play
@@ -153,6 +155,18 @@ src/
 - Provides `sendToPeer()`, `sendToAll()`, `onMessageType()` abstraction
 - Heartbeat + peer join/leave detection
 
+### Real-World Connectivity
+
+To work reliably across the internet, the WebRTC ICE configuration in `src/network/ConnectionManager.js` uses:
+
+- **6 public STUN servers** (Google + Cloudflare) — let peers behind typical home/office NATs discover each other
+- **Open Relay Project TURN servers** (`turn:openrelay.metered.ca`) — relay traffic when a direct connection is impossible (symmetric NAT, strict/corporate firewalls). Free, no account needed for these public credentials
+- **4 WebTorrent trackers** for signaling redundancy (`relayConfig.redundancy: 4`)
+
+If you self-host or use paid TURN (e.g. Coturn, Twilio NTS, Metered), replace the `ICE_SERVERS` array in `ConnectionManager.js` with your own `{ urls, username, credential }` entries. Any live peer between two devices on different networks is a real end-to-end test.
+
+> **Note on host resilience:** the host's browser runs the authoritative engine. If the host disconnects, the room dissolves (no host migration is implemented yet).
+
 ---
 
 ## Changes Made (Refactoring from Local to P2P)
@@ -195,4 +209,5 @@ src/
 - **No save/load in multiplayer**: Save/Load buttons hidden in multiplayer game view
 - **No undo in multiplayer**: Game history is immutable; host-authoritative prevents rewinding
 - **Duplicate state hydration on host**: Both `broadcastState`'s `onStateUpdate` callback and the received `GAME_STATE_SYNC` message call `hydrateState` on the host. Harmless — the second call renders the same state.
+- **Heartbeat keeps peers alive**: `ConnectionManager` listens for `HEARTBEAT` messages so live peers are never dropped by the stale-peer check (was previously dropping connected peers after 15s).
 - **Host disconnect**: No host migration implemented. If host closes the tab, the game ends for all.

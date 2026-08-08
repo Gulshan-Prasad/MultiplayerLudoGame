@@ -3,7 +3,41 @@ import { APP_NAME, HEARTBEAT_INTERVAL_MS } from './NetworkConstants';
 import { MESSAGE_TYPES } from './NetworkMessages';
 
 const STALE_PEER_CHECK_MS = 5000;
-const STALE_PEER_TIMEOUT_MS = 15000;
+const STALE_PEER_TIMEOUT_MS = 45000;
+
+// Combined STUN + TURN servers for real-world NAT traversal.
+// STUN handles typical NATs; TURN relays traffic when direct
+// connectivity is impossible (symmetric NAT, strict firewalls).
+// Free public TURN: Open Relay Project (https://openrelayproject.org)
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:openrelay.metered.ca:80' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+];
+
+const RELAY_CONFIG = {
+  // Use more public WebTorrent trackers for robust signaling.
+  redundancy: 4,
+};
 
 export class ConnectionManager {
   constructor() {
@@ -28,11 +62,9 @@ export class ConnectionManager {
       {
         appId: APP_NAME,
         rtcConfig: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-          ],
+          iceServers: ICE_SERVERS,
         },
+        relayConfig: RELAY_CONFIG,
       },
       roomCode,
       {
@@ -85,6 +117,13 @@ export class ConnectionManager {
   }
 
   _setupHeartbeat() {
+    // Refresh last-seen on every incoming heartbeat so the stale-peer
+    // check never drops a live peer. Without this listener, heartbeats
+    // are sent but never handled, and _lastSeen goes stale.
+    this.onMessageType(MESSAGE_TYPES.HEARTBEAT, () => {
+      // last-seen bookkeeping is handled by onMessageType's wrapper
+    });
+
     const interval = setInterval(() => {
       if (!this.isActive) {
         clearInterval(interval);

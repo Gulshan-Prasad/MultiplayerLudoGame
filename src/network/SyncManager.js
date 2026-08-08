@@ -170,6 +170,18 @@ export class SyncManager {
     const state = this.authoritativeState;
     const nextPlayer = getNextPlayer(state);
 
+    if (!nextPlayer) {
+      this.authoritativeState = {
+        ...state,
+        gamePhase: GAME_PHASES.GAME_OVER,
+        gameStatus: GAME_STATUS.FINISHED,
+        rankings: getRankings(state),
+      };
+      this._clearAfkTimer();
+      this.broadcastState({ reason: 'all_players_inactive' });
+      return;
+    }
+
     this.authoritativeState = {
       ...state,
       currentTurn: nextPlayer,
@@ -213,7 +225,7 @@ export class SyncManager {
       return;
     }
 
-    if (activePlayerIds.length === 1 && Object.keys(state.players).length === 2) {
+    if (activePlayerIds.length === 1) {
       const winnerId = activePlayerIds[0];
       if (state.players[winnerId]) {
         state.players[winnerId].isWinner = true;

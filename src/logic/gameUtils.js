@@ -292,7 +292,7 @@ export function getNextPlayer(state) {
     const p = state.players[pid];
     return p && !p.isWinner && !p.isDisconnected;
   });
-  if (activePlayers.length === 0) return playerIds[0];
+  if (activePlayers.length === 0) return null;
   if (activePlayers.length === 1) return activePlayers[0];
   for (let i = 1; i <= playerIds.length; i++) {
     const nextIndex = (currentIndex + i) % playerIds.length;

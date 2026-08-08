@@ -33,22 +33,22 @@ function Dice() {
   const isSix = diceValue === 6 && !diceRolling;
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-2 sm:gap-3">
       {showPenalty && (
-        <div className="text-red-600 font-bold text-sm md:text-base animate-bounce bg-red-100 px-4 py-1.5 rounded-lg border border-red-200">
+        <div className="text-red-600 font-bold text-xs sm:text-sm md:text-base animate-bounce bg-red-100 px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg border border-red-200 text-center">
           Three 6's! Turn forfeited!
         </div>
       )}
 
       {isSix && consecutiveSixes > 0 && consecutiveSixes < 3 && (
-        <div className="text-green-700 font-bold text-sm bg-green-100 px-4 py-1.5 rounded-lg animate-pulse border border-green-200">
+        <div className="text-green-700 font-bold text-xs sm:text-sm bg-green-100 px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg animate-pulse border border-green-200">
           Roll 6! Bonus turn!
         </div>
       )}
 
       <div
         className={`
-          relative w-20 h-20 md:w-24 md:h-24 rounded-2xl select-none cursor-pointer
+          relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-2xl select-none cursor-pointer
           transition-all duration-300
           ${canRoll ? 'hover:scale-110 hover:shadow-2xl active:scale-95' : ''}
           ${shaking || diceRolling ? 'animate-[shake_0.3s_ease-in-out_infinite]' : ''}
@@ -69,8 +69,8 @@ function Dice() {
           </svg>
         </div>
         {canRoll && (
-          <div className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-md">
-            <svg viewBox="0 0 24 24" fill="white" className="w-3.5 h-3.5">
+          <div className="absolute -top-2 -right-2 w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-md">
+            <svg viewBox="0 0 24 24" fill="white" className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-3.5 md:h-3.5">
               <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z" />
             </svg>
           </div>
@@ -78,7 +78,7 @@ function Dice() {
       </div>
 
       {diceValue > 0 && !diceRolling && (
-        <div className="text-lg font-bold text-gray-700 bg-white/80 px-4 py-1 rounded-lg shadow-sm">
+        <div className="text-sm sm:text-base md:text-lg font-bold text-gray-700 bg-white/80 px-3 sm:px-4 py-0.5 sm:py-1 rounded-lg shadow-sm">
           Rolled: <span className="text-blue-600">{diceValue}</span>
         </div>
       )}
@@ -86,7 +86,7 @@ function Dice() {
       {canRoll && (
         <button
           onClick={handleRoll}
-          className="w-full px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold rounded-xl shadow-md 
+          className="w-full px-4 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold rounded-xl shadow-md text-sm sm:text-base
             hover:shadow-lg hover:from-blue-600 hover:to-blue-800 active:scale-[0.97] transition-all duration-200
             focus:outline-none focus:ring-4 focus:ring-blue-300"
         >
