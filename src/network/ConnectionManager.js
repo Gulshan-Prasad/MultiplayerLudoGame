@@ -29,6 +29,7 @@ export class ConnectionManager {
     this.onPeersChange = null;
     this.onStatusChange = null;
     this.onConnectionFailed = null;
+    this.onPeerDisconnected = null;
     this._lastSeen = {};
     this._messageListeners = {};
     this._staleCheckTimer = null;
@@ -51,6 +52,10 @@ export class ConnectionManager {
 
   _peerTopic(peerId) {
     return `${this._topic(this.roomCode)}/peer/${peerId}`;
+  }
+
+  _presenceTopic(peerId) {
+    return `${this._topic(this.roomCode)}/presence/${peerId}`;
   }
 
   createOrJoinRoom(roomCode) {
@@ -78,6 +83,19 @@ export class ConnectionManager {
       reconnectPeriod: 2000,
       connectTimeout: 20000,
       clientId: `ludo_${this.myPeerId}`,
+      // Last Will & Testament: if this socket drops abruptly, the broker
+      // immediately publishes a PLAYER_LEFT to our presence topic so all
+      // other peers remove us right away (no 45s stale-timeout wait).
+      will: {
+        topic: this._presenceTopic(this.myPeerId),
+        payload: JSON.stringify({
+          type: MESSAGE_TYPES.PLAYER_LEFT,
+          data: { playerId: this.myPeerId },
+          sender: this.myPeerId,
+        }),
+        qos: 1,
+        retain: false,
+      },
     };
     if (broker.username) options.username = broker.username;
     if (broker.password) options.password = broker.password;
@@ -98,6 +116,10 @@ export class ConnectionManager {
       this.client.subscribe(this._peerTopic(this.myPeerId), subOpts, (err) => {
         if (err) console.warn(`[Ludo][MQTT] subscribe peer failed:`, err);
         else this._log(`subscribed to ${this._peerTopic(this.myPeerId)}`);
+      });
+      this.client.subscribe(`${this._topic(this.roomCode)}/presence/+`, subOpts, (err) => {
+        if (err) console.warn(`[Ludo][MQTT] subscribe presence failed:`, err);
+        else this._log(`subscribed to ${this._topic(this.roomCode)}/presence/+`);
       });
       this._setupHeartbeat();
       this._startStalePeerCheck();
@@ -154,6 +176,21 @@ export class ConnectionManager {
 
     if (msg.type !== MESSAGE_TYPES.HEARTBEAT) {
       this._log(`recv [${msg.type}] from ${sender.slice(0, 8)}...`);
+    }
+
+    // A peer announced it left (graceful PLAYER_LEFT or LWT after abrupt drop).
+    // Remove it from the peer list immediately.
+    if (msg.type === MESSAGE_TYPES.PLAYER_LEFT && msg.data && msg.data.playerId === sender) {
+      if (this.peerIds.includes(sender)) {
+        this._log(`peer left: ${sender.slice(0, 8)}... (total peers: ${this.peerIds.length - 1})`);
+        this.peerIds = this.peerIds.filter(p => p !== sender);
+        delete this._lastSeen[sender];
+        if (this.onPeersChange) this.onPeersChange([...this.peerIds]);
+      }
+      const cb = this._messageListeners[msg.type];
+      if (cb) cb(msg.data, sender);
+      if (this.onPeerDisconnected) this.onPeerDisconnected(msg.data.playerId);
+      return;
     }
 
     this._lastSeen[sender] = Date.now();

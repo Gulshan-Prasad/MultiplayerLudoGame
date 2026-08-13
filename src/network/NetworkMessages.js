@@ -38,6 +38,9 @@ export const MESSAGE_TYPES = {
   // Chat
   CHAT_MESSAGE: 'chat_message',
 
+  // Profile
+  PROFILE_UPDATE: 'profile_update',
+
   // Errors
   ERROR: 'error',
   REJECTED: 'rejected',

@@ -25,20 +25,20 @@ export const HOME_BASE_CELLS = {
 
 export const HOME_BASE_POSITIONS = {
   green: [
-    { row: 1, col: 1 }, { row: 1, col: 4 },
-    { row: 4, col: 1 }, { row: 4, col: 4 },
+    { row: 0.9, col: 1.6 }, { row: 0.9, col: 3.4 },
+    { row: 2.9, col: 1.6 }, { row: 2.9, col: 3.4 },
   ],
   yellow: [
-    { row: 1, col: 10 }, { row: 1, col: 13 },
-    { row: 4, col: 10 }, { row: 4, col: 13 },
+    { row: 0.9, col: 10.6 }, { row: 0.9, col: 12.4 },
+    { row: 2.9, col: 10.6 }, { row: 2.9, col: 12.4 },
   ],
   blue: [
-    { row: 10, col: 10 }, { row: 10, col: 13 },
-    { row: 13, col: 10 }, { row: 13, col: 13 },
+    { row: 9.9, col: 10.6 }, { row: 9.9, col: 12.4 },
+    { row: 11.9, col: 10.6 }, { row: 11.9, col: 12.4 },
   ],
   red: [
-    { row: 10, col: 1 }, { row: 10, col: 4 },
-    { row: 13, col: 1 }, { row: 13, col: 4 },
+    { row: 9.9, col: 1.6 }, { row: 9.9, col: 3.4 },
+    { row: 11.9, col: 1.6 }, { row: 11.9, col: 3.4 },
   ],
 };
 

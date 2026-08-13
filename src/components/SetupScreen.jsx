@@ -2,6 +2,7 @@ import { useState, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { PLAYER_COLORS, STORAGE_KEY } from '../data/constants';
+import CoolNameInput from './CoolNameInput';
 
 const PIECE_IMAGES = {
   red: '/textures/pieces/RedPlayer.png',
@@ -43,7 +44,7 @@ function SetupScreen() {
   }, [playerNames, playerCount, startGame]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 page-bg relative overflow-hidden">
       <img
         src="/textures/Board.png"
         alt=""
@@ -51,15 +52,15 @@ function SetupScreen() {
         draggable={false}
       />
 
-      <div className="bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl p-6 md:p-8 max-w-md w-full border border-white/20 relative z-10">
+      <div className="panel-classic p-6 md:p-8 max-w-md w-full relative z-10">
         <div className="text-center mb-6">
           <div className="text-5xl mb-3">🎲</div>
-          <h1 className="text-3xl font-bold text-white">Ludo Game</h1>
-          <p className="text-indigo-200 text-sm mt-1">Classic board game for 2-4 players</p>
+          <h1 className="game-title text-3xl font-bold">Ludo Game</h1>
+          <p className="text-[#7a5c36] text-sm mt-1">Classic board game for 2-4 players</p>
         </div>
 
         <div className="mb-6">
-          <label className="block text-sm font-semibold text-white/80 mb-2">
+          <label className="block text-sm font-semibold text-[#5b3a1e] mb-2">
             Number of Players
           </label>
           <div className="flex gap-3">
@@ -70,11 +71,9 @@ function SetupScreen() {
                   setPlayerCount(n);
                   setError('');
                 }}
-                className={`flex-1 py-2 rounded-lg font-bold text-lg transition-all duration-200
-                  ${playerCount === n
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
-                    : 'bg-white/10 text-white/60 hover:bg-white/20'
-                  }`}
+                className={`btn-3d btn-md flex-1 ${
+                  playerCount === n ? 'btn-3d-gold' : 'btn-3d-cream'
+                }`}
               >
                 {n}
               </button>
@@ -82,48 +81,47 @@ function SetupScreen() {
           </div>
         </div>
 
-        <div className="space-y-3 mb-6">
-          <label className="block text-sm font-semibold text-white/80">Player Names</label>
+        <div className="space-y-4 mb-6">
+          <label className="block text-sm font-semibold text-[#5b3a1e]">Player Names</label>
           {PLAYER_COLORS.slice(0, playerCount).map((color, i) => (
-            <div key={color} className="flex items-center gap-2">
-              <img
-                src={PIECE_IMAGES[color]}
-                alt=""
-                className="w-6 h-6 object-contain flex-shrink-0"
-                draggable={false}
-              />
-              <input
-                type="text"
+            <div key={color}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <img
+                  src={PIECE_IMAGES[color]}
+                  alt=""
+                  className="w-6 h-6 object-contain flex-shrink-0"
+                  draggable={false}
+                />
+                <span className="text-xs font-bold uppercase tracking-wide text-[#7a5c36]">
+                  Player {i + 1}
+                </span>
+              </div>
+              <CoolNameInput
                 value={playerNames[i]}
-                onChange={(e) => handleNameChange(i, e.target.value)}
+                onChange={(v) => handleNameChange(i, v)}
                 placeholder={`Player ${i + 1}`}
-                className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm text-white placeholder-white/40"
-                maxLength={20}
+                variant="green"
               />
             </div>
           ))}
         </div>
 
         {error && (
-          <div className="text-red-300 text-sm text-center mb-4 bg-red-500/10 border border-red-500/20 p-2 rounded-lg">
+          <div className="text-[#93302f] text-sm text-center mb-4 bg-[#fde8e8] border-2 border-[#d64545] p-2 rounded-lg">
             {error}
           </div>
         )}
 
         <button
           onClick={handleStart}
-          className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold
-            rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95
-            transition-all duration-200 mb-3"
+          className="btn-3d btn-3d-green btn-lg btn-block mb-3"
         >
           Start Local Game
         </button>
 
         <button
           onClick={() => navigate('/online')}
-          className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold
-            rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95
-            transition-all duration-200 mb-3"
+          className="btn-3d btn-3d-blue btn-lg btn-block mb-3"
         >
           Online Multiplayer
         </button>
@@ -131,9 +129,7 @@ function SetupScreen() {
         {savedGameExists && (
           <button
             onClick={() => { loadGame(); }}
-            className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-purple-700 text-white font-semibold
-              rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95
-              transition-all duration-200 mb-3"
+            className="btn-3d btn-3d-purple btn-lg btn-block mb-3"
           >
             Load Saved Game
           </button>
@@ -141,7 +137,7 @@ function SetupScreen() {
 
         <button
           onClick={() => navigate('/')}
-          className="w-full py-2 text-white/50 hover:text-white/80 text-sm transition-colors"
+          className="w-full py-2 text-[#7a5c36] hover:text-[#9c7a0e] text-sm transition-colors"
         >
           ← Back to Main Menu
         </button>

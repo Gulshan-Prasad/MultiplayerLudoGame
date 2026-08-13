@@ -212,6 +212,10 @@ export function gameReducer(state, action) {
       return createInitialState();
     }
 
+    case 'RESET_STATE': {
+      return createInitialState();
+    }
+
     case 'SAVE_GAME': {
       try {
         const toSave = { ...state, turnTimer: 0, diceRolling: false };
@@ -254,7 +258,7 @@ export function gameReducer(state, action) {
     }
 
     case 'TIMEOUT_TURN': {
-      if (state.gamePhase !== GAME_PHASES.ROLLING) return state;
+      if (state.gamePhase !== GAME_PHASES.ROLLING && state.gamePhase !== GAME_PHASES.TURN_COMPLETE) return state;
       const nextPlayer = getNextPlayer(state);
       if (!nextPlayer) {
         return {

@@ -5,11 +5,11 @@ import { STORAGE_KEY } from '../data/constants';
 
 function MainMenu() {
   const navigate = useNavigate();
-  const { loadGame } = useGame();
+  const { loadGame, resetState } = useGame();
   const savedGameExists = !!localStorage.getItem(STORAGE_KEY);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 page-bg relative overflow-hidden">
       <img
         src="/textures/Board.png"
         alt=""
@@ -17,54 +17,45 @@ function MainMenu() {
         draggable={false}
       />
 
-      <div className="bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl p-8 max-w-sm w-full border border-white/20 relative">
+      <div className="panel-classic p-8 max-w-sm w-full relative">
         <div className="text-center mb-8">
           <img
             src="/textures/Board.png"
             alt="Ludo"
-            className="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-lg ring-2 ring-white/20 object-cover"
+            className="w-20 h-20 mx-auto mb-4 rounded-xl border-4 border-[#3e2416] shadow-[4px_4px_0_#1e1109] object-cover"
             draggable={false}
           />
-          <h1 className="text-4xl font-bold text-white mb-2">Ludo</h1>
-          <p className="text-indigo-200 text-sm">Classic board game for 2-4 players</p>
+          <h1 className="game-title text-4xl font-bold mb-2">Ludo</h1>
+          <p className="text-[#7a5c36] text-sm">Classic board game for 2-4 players</p>
         </div>
 
         <div className="space-y-3">
           <button
-            onClick={() => navigate('/local')}
-            className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold
-              rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95
-              transition-all duration-200 flex items-center justify-center gap-2"
+            onClick={() => { resetState(); navigate('/local'); }}
+            className="btn-3d btn-3d-green btn-lg btn-block"
           >
-            <span>🎮</span>
             <span>Local Game</span>
           </button>
 
           <button
             onClick={() => navigate('/online')}
-            className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold
-              rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95
-              transition-all duration-200 flex items-center justify-center gap-2"
+            className="btn-3d btn-3d-blue btn-lg btn-block"
           >
-            <span>🌐</span>
             <span>Online Multiplayer</span>
           </button>
 
           {savedGameExists && (
             <button
               onClick={() => { loadGame(); navigate('/local'); }}
-              className="w-full py-3 bg-gradient-to-r from-purple-500 to-purple-700 text-white font-semibold
-                rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-95
-                transition-all duration-200 flex items-center justify-center gap-2"
+              className="btn-3d btn-3d-purple btn-lg btn-block"
             >
-              <span>📂</span>
               <span>Load Saved Game</span>
             </button>
           )}
         </div>
 
         <div className="mt-8 text-center">
-          <p className="text-indigo-300/40 text-xs">Choose a game mode to get started</p>
+          <p className="text-[#9a8b6e] text-xs">Choose a game mode to get started</p>
         </div>
       </div>
     </div>

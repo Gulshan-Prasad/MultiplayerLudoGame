@@ -19,9 +19,9 @@ function Piece({ playerColor, piece, isSelectable, isSelected, justMoved, onClic
   const top = `calc(${cellRow} * ${CELL_FRACTION * 100}% + 50% * ${CELL_FRACTION} + ${offsetY * CELL_FRACTION * 100}% - ${PIECE_SIZE} / 2)`;
 
   const glowClass = isSelected
-    ? 'brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.9)] scale-110'
+    ? 'piece-selected cursor-pointer'
     : isSelectable
-    ? 'brightness-110 drop-shadow-[0_0_6px_rgba(255,200,0,0.8)] cursor-pointer hover:scale-110 animate-pulse'
+    ? 'piece-selectable cursor-pointer hover:scale-110'
     : justMoved
     ? 'drop-shadow-[0_0_6px_rgba(255,215,0,0.8)] scale-105'
     : '';

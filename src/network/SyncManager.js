@@ -26,6 +26,15 @@ export class SyncManager {
     return this.authoritativeState ? JSON.parse(JSON.stringify(this.authoritativeState)) : null;
   }
 
+  // Tear down any in-flight work. Must be called before a new room reuses this
+  // manager so a leftover AFK timer can't broadcast a stale game into a fresh lobby.
+  destroy() {
+    this._clearAfkTimer();
+    this.authoritativeState = null;
+    this.onStateUpdate = null;
+    this.onError = null;
+  }
+
   startGame(playerConfigs) {
     resetDiceSeed();
     const players = {};
@@ -108,10 +117,14 @@ export class SyncManager {
     if (!state || state.gameStatus !== GAME_STATUS.IN_PROGRESS) return;
     if (state.gamePhase === GAME_PHASES.GAME_OVER) return;
 
+    // Every fresh cooldown window starts now, so the client countdown
+    // matches exactly when the turn will be auto-skipped.
+    this.authoritativeState = { ...state, turnTimer: Date.now() };
+
     this._afkTimer = setTimeout(() => {
       if (!this.authoritativeState) return;
       const s = this.authoritativeState;
-      if (s.gamePhase === GAME_PHASES.ROLLING || s.gamePhase === GAME_PHASES.SELECTING_PIECE) {
+      if (s.gamePhase === GAME_PHASES.ROLLING || s.gamePhase === GAME_PHASES.SELECTING_PIECE || s.gamePhase === GAME_PHASES.TURN_COMPLETE) {
         console.log(`[SyncManager] AFK timeout for ${s.currentTurn}, skipping turn`);
         this._advanceToNextTurn();
         this.broadcastState({ reason: 'afk_timeout' });
@@ -189,6 +202,7 @@ export class SyncManager {
       diceValue: 0,
       consecutiveSixes: 0,
       turnNumber: state.turnNumber + 1,
+      turnTimer: Date.now(),
       availableMoves: [],
     };
 
@@ -331,7 +345,7 @@ export class SyncManager {
           pieceId: move.pieceId,
           from: move.fromPosition,
           to: move.toPosition,
-          killsPlayerId: move.killsPlayerId,
+          killsPlayerIds: move.killsPlayerIds || [],
           finishes: move.finishes,
         },
       });
@@ -346,7 +360,7 @@ export class SyncManager {
       availableMoves: moves.map(m => ({
         pieceId: m.pieceId,
         fromPosition: m.fromPosition,
-        killsPlayerId: !!m.killsPlayerId,
+        killsPlayerIds: m.killsPlayerIds || [],
         finishes: m.finishes,
         entersHomeStretch: m.entersHomeStretch,
         toPosition: m.toPosition,
@@ -406,7 +420,7 @@ export class SyncManager {
         pieceId,
         from: move.fromPosition,
         to: move.toPosition,
-        killsPlayerId: move.killsPlayerId,
+        killsPlayerIds: move.killsPlayerIds || [],
         finishes: move.finishes,
       },
     });

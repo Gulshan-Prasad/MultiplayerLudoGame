@@ -23,9 +23,11 @@ export function useNetwork() {
       networkSelectPiece: () => {},
       networkEndTurn: () => {},
       networkError: null,
+      disconnectNotice: null,
       peerIds: [],
       chatMessages: [],
       sendChatMessage: () => {},
+      sendProfileUpdate: () => {},
     };
   }
   return ctx;

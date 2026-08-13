@@ -14,8 +14,8 @@ function PlayerSlot({ player, playerIndex, isHost, currentPeerId, onToggleReady 
   const isMe = player.id === currentPeerId;
   const displayColor = PLAYER_COLORS[playerIndex] || player.color;
   return (
-    <div className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all backdrop-blur-sm ${
-      isMe ? 'border-blue-400 bg-blue-500/20' : 'border-white/20 bg-white/5'
+    <div className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+      isMe ? 'border-[#d4a017] bg-[#fdf1dc] shadow-[3px_3px_0_#9c7a0e]' : 'border-[#a89363] bg-[#efe2c0]'
     }`}>
       <img
         src={PIECE_IMAGES[displayColor]}
@@ -25,15 +25,15 @@ function PlayerSlot({ player, playerIndex, isHost, currentPeerId, onToggleReady 
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm truncate text-white">{player.name}</span>
+          <span className="font-semibold text-sm truncate text-[#3e2416]">{player.name}</span>
           {isHost && (
-            <span className="text-xs bg-yellow-500 text-yellow-900 px-2 py-0.5 rounded-full font-bold">HOST</span>
+            <span className="badge-classic bg-[#e8a020] text-white border-[#a96f0d]">HOST</span>
           )}
           {isMe && !isHost && (
-            <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">YOU</span>
+            <span className="badge-classic bg-[#1d7dd1] text-white border-[#12559a]">YOU</span>
           )}
         </div>
-        <div className="text-xs text-white/50">
+        <div className="text-xs text-[#7a5c36]">
           {player.isConnected ? 'Connected' : 'Disconnected'}
         </div>
       </div>
@@ -41,25 +41,27 @@ function PlayerSlot({ player, playerIndex, isHost, currentPeerId, onToggleReady 
         {!isHost && isMe && (
           <button
             onClick={() => onToggleReady?.()}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-              player.isReady
-                ? 'bg-emerald-500 text-white'
-                : 'bg-white/20 text-white/70 hover:bg-white/30'
+            className={`btn-3d btn-sm ${
+              player.isReady ? 'btn-3d-green' : 'btn-3d-cream'
             }`}
           >
             {player.isReady ? 'Ready' : 'Not Ready'}
           </button>
         )}
         {!isHost && !isMe && (
-          <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${
-            player.isReady ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-white/50'
+          <span className={`badge-classic ${
+            player.isReady
+              ? 'bg-[#e7f4e5] text-[#1b6b2e] border-[#2f9e44]'
+              : 'bg-[#efe2c0] text-[#7a5c36] border-[#a89363]'
           }`}>
             {player.isReady ? 'Ready' : 'Not Ready'}
           </span>
         )}
         {isHost && (
-          <span className={`px-3 py-1.5 text-xs font-bold rounded-lg ${
-            player.isReady ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-white/50'
+          <span className={`badge-classic ${
+            player.isReady
+              ? 'bg-[#e7f4e5] text-[#1b6b2e] border-[#2f9e44]'
+              : 'bg-[#efe2c0] text-[#7a5c36] border-[#a89363]'
           }`}>
             {player.isReady ? 'Ready' : 'Waiting'}
           </span>
@@ -94,25 +96,25 @@ function MultiplayerLobby() {
   }, [leaveRoom, navigate]);
 
   const handleStartGame = useCallback(() => {
-    if (!isHost || !lobby) return;
+    if (!isHost || !lobby || !allReady) return;
     const configs = lobby.players.map((p, i) => ({
       name: p.name,
       color: PLAYER_COLORS[i],
     }));
     startGame(configs);
     navigate('/online/game');
-  }, [isHost, lobby, startGame, navigate]);
+  }, [isHost, lobby, allReady, startGame, navigate]);
 
   if (!lobby) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900">
-        <div className="text-white/50 animate-pulse text-lg">Connecting to room...</div>
+      <div className="min-h-screen flex items-center justify-center page-bg">
+        <div className="text-[#fdf1dc] animate-pulse text-lg">Connecting to room...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 page-bg relative overflow-hidden">
       <img
         src="/textures/Board.png"
         alt=""
@@ -120,22 +122,21 @@ function MultiplayerLobby() {
         draggable={false}
       />
 
-      <div className="bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl p-6 max-w-md w-full border border-white/20 relative z-10">
+      <div className="panel-classic p-6 max-w-md w-full relative z-10">
         <div className="text-center mb-6">
-          <div className="text-4xl mb-2">🎮</div>
-          <h2 className="text-xl font-bold text-white">Game Lobby</h2>
-          <p className="text-indigo-200 text-sm">{lobby.players.length}/{lobby.maxPlayers} players</p>
+          <h2 className="game-title text-xl font-bold">Game Lobby</h2>
+          <p className="text-[#7a5c36] text-sm">{lobby.players.length}/{lobby.maxPlayers} players</p>
         </div>
 
-        <div className="bg-white/10 rounded-xl p-4 mb-4 text-center border border-white/10">
-          <div className="text-xs text-white/50 mb-1">Room Code</div>
-          <div className="text-3xl font-mono font-bold text-white tracking-widest select-all">
+        <div className="card-classic p-4 mb-4 text-center">
+          <div className="text-xs text-[#7a5c36] mb-1">Room Code</div>
+          <div className="room-code-classic text-3xl px-4 py-2 select-all">
             {displayCode}
           </div>
           {displayCode && (
             <button
               onClick={copyRoomCode}
-              className="mt-2 text-sm text-blue-300 hover:text-blue-200 font-medium"
+              className="mt-2 text-sm text-[#12559a] hover:text-[#9c7a0e] font-bold"
             >
               Copy Code
             </button>
@@ -143,7 +144,7 @@ function MultiplayerLobby() {
         </div>
 
         <div className="space-y-2 mb-6">
-          <h3 className="text-sm font-semibold text-white/80 mb-2">Players</h3>
+          <h3 className="text-sm font-semibold text-[#5b3a1e] mb-2">Players</h3>
           {lobby.players.map((player, idx) => (
             <PlayerSlot
               key={player.id}
@@ -156,15 +157,15 @@ function MultiplayerLobby() {
             />
           ))}
           {Array.from({ length: lobby.maxPlayers - lobby.players.length }).map((_, i) => (
-            <div key={`empty-${i}`} className="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-white/20 bg-white/5">
-              <div className="w-5 h-5 rounded-full bg-white/10" />
-              <span className="text-sm text-white/40">Waiting for player...</span>
+            <div key={`empty-${i}`} className="flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-[#a89363] bg-[#efe2c0]">
+              <div className="w-5 h-5 rounded-full bg-[#c9b78a]" />
+              <span className="text-sm text-[#9a8b6e]">Waiting for player...</span>
             </div>
           ))}
         </div>
 
         {networkError && (
-          <div className="text-red-300 text-sm text-center mb-4 bg-red-500/10 border border-red-500/20 p-2 rounded-lg">
+          <div className="text-[#93302f] text-sm text-center mb-4 bg-[#fde8e8] border-2 border-[#d64545] p-2 rounded-lg">
             {networkError}
           </div>
         )}
@@ -173,10 +174,10 @@ function MultiplayerLobby() {
           {!isHost && (
             <button
               onClick={toggleReady}
-              className={`flex-1 py-2.5 font-bold rounded-xl transition-all ${
+              className={`btn-3d btn-md flex-1 ${
                 lobby.players.find(p => p.id === peerIds[0])?.isReady
-                  ? 'bg-white/20 text-white/60'
-                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  ? 'btn-3d-cream'
+                  : 'btn-3d-green'
               }`}
             >
               {lobby.players.find(p => p.id === peerIds[0])?.isReady ? 'Unready' : 'Ready'}
@@ -186,14 +187,14 @@ function MultiplayerLobby() {
             <button
               onClick={handleStartGame}
               disabled={!allReady}
-              className="flex-1 py-2.5 font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="btn-3d btn-3d-blue btn-md flex-1"
             >
               {allReady ? 'Start Game' : 'Waiting for players...'}
             </button>
           )}
           <button
             onClick={handleLeave}
-            className="px-4 py-2.5 font-bold rounded-xl bg-red-500/80 hover:bg-red-600 text-white transition-all"
+            className="btn-3d btn-3d-red btn-md"
           >
             Leave
           </button>

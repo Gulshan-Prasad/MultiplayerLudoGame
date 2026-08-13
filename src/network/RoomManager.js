@@ -30,9 +30,11 @@ export function addPlayerToLobby(lobby, player) {
   const existing = lobby.players.find(p => p.id === player.id);
   if (existing) return lobby;
   if (lobby.players.length >= lobby.maxPlayers) return lobby;
+  const colors = ['red', 'green', 'yellow', 'blue'];
+  const color = colors[lobby.players.length] || null;
   return {
     ...lobby,
-    players: [...lobby.players, player],
+    players: [...lobby.players, { ...player, color }],
     playerCount: lobby.players.length + 1,
     hostId: lobby.hostId || player.id,
   };
@@ -55,6 +57,16 @@ export function updatePlayerReady(lobby, playerId, isReady) {
     ...lobby,
     players: lobby.players.map(p =>
       p.id === playerId ? { ...p, isReady } : p
+    ),
+  };
+}
+
+export function updatePlayerProfilePic(lobby, playerId, profilePic) {
+  if (!lobby) return lobby;
+  return {
+    ...lobby,
+    players: lobby.players.map(p =>
+      p.id === playerId ? { ...p, profilePic: profilePic || null } : p
     ),
   };
 }

@@ -3,10 +3,17 @@ import { NetworkContext } from './useNetwork';
 import { ConnectionManager } from './ConnectionManager';
 import { SyncManager } from './SyncManager';
 import { MESSAGE_TYPES } from './NetworkMessages';
-import { generateRoomCode, validateRoomCode, createDefaultLobby, addPlayerToLobby, removePlayerFromLobby, updatePlayerReady } from './RoomManager';
+import { generateRoomCode, validateRoomCode, createDefaultLobby, addPlayerToLobby, removePlayerFromLobby, updatePlayerReady, updatePlayerProfilePic } from './RoomManager';
 import { deserializeGameState } from './GameSerializer';
 import { CONNECTION_STATUS, NETWORK_ROLE } from './NetworkConstants';
-import { GAME_PHASES } from '../data/constants';
+import { GAME_PHASES, GAME_STATUS } from '../data/constants';
+
+const _correctTurnTimer = (state, hostBroadcastTimestamp) => {
+  if (!state || !state.turnTimer) return state;
+  const hostElapsed = (hostBroadcastTimestamp || 0) - state.turnTimer;
+  const clientTurnTimer = Date.now() - Math.max(0, hostElapsed);
+  return { ...state, turnTimer: clientTurnTimer };
+};
 
 export function NetworkProvider({ children, onGameStateReceived }) {
   const [connectionStatus, setConnectionStatus] = useState(CONNECTION_STATUS.DISCONNECTED);
@@ -14,6 +21,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
   const [roomCode, setRoomCode] = useState(null);
   const [lobby, setLobby] = useState(null);
   const [networkError, setNetworkError] = useState(null);
+  const [disconnectNotice, setDisconnectNotice] = useState(null);
   const [peerIds, setPeerIds] = useState([]);
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [myPlayerId, setMyPlayerId] = useState(null);
@@ -21,11 +29,13 @@ export function NetworkProvider({ children, onGameStateReceived }) {
   const connRef = useRef(null);
   const syncRef = useRef(null);
   const playerNameRef = useRef('');
+  const playerProfilePicRef = useRef(null);
   const playerIdRef = useRef(null);
   const lobbyRef = useRef(null);
   const hostPeerIdRef = useRef(null);
   const networkRoleRef = useRef(NETWORK_ROLE.NONE);
   const joinRetryTimerRef = useRef(null);
+  const gameStateRef = useRef(null);
 
   const _stopJoinRetry = useCallback(() => {
     if (joinRetryTimerRef.current) {
@@ -34,11 +44,27 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     }
   }, []);
 
-  const _setupConnection = useCallback((roomCodeVal, playerName) => {
+  const _setupConnection = useCallback((roomCodeVal, playerName, profilePic) => {
     playerNameRef.current = playerName;
+    if (profilePic !== undefined) playerProfilePicRef.current = profilePic || null;
 
     if (!connRef.current) {
       connRef.current = new ConnectionManager();
+    }
+
+    // A fresh connection must never inherit state (gameStateRef, authoritative
+    // game, pending AFK timers, join retries, or stale peer/lobby ids) from a
+    // previous room. If the user left an earlier game via browser back, that
+    // manager is still alive — tear it down so a stale broadcast can't
+    // auto-start the new room's game or misfire on old peers.
+    _stopJoinRetry();
+    gameStateRef.current = null;
+    lobbyRef.current = null;
+    hostPeerIdRef.current = null;
+    playerIdRef.current = null;
+    if (syncRef.current) {
+      syncRef.current.destroy();
+      syncRef.current = null;
     }
 
     const _prevPeerIdsRef = { current: [] };
@@ -73,6 +99,40 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       }
       _prevPeerIdsRef.current = newPeerIds;
 
+      // If the host left during an in-progress game and only we remain, the game
+      // can't continue (the host is authoritative), so resolve a win for us.
+      if (networkRoleRef.current === NETWORK_ROLE.CLIENT
+        && peers.length === 0
+        && leftPeerIds.includes(hostPeerIdRef.current)) {
+        const last = gameStateRef.current;
+        if (last && last.gameStatus === GAME_STATUS.IN_PROGRESS && last.players) {
+          const colors = ['red', 'green', 'yellow', 'blue'];
+          const myLobbyIndex = currentLobby
+            ? currentLobby.players.findIndex(p => p.id === myId)
+            : -1;
+          const myColor = myLobbyIndex >= 0 ? colors[myLobbyIndex] : null;
+          if (myColor && last.players[myColor]) {
+            const players = JSON.parse(JSON.stringify(last.players));
+            players[myColor].isWinner = true;
+            const rankings = [
+              { playerId: myColor, rank: 1, name: players[myColor].name, color: players[myColor].color },
+              ...Object.entries(players)
+                .filter(([id]) => id !== myColor)
+                .map(([id, p]) => ({ playerId: id, rank: 2, name: p.name, color: p.color })),
+            ];
+            onGameStateReceived({
+              ...last,
+              players,
+              winner: myColor,
+              gamePhase: GAME_PHASES.GAME_OVER,
+              gameStatus: GAME_STATUS.FINISHED,
+              rankings,
+              sequence: (last.sequence || 0) + 1,
+            });
+          }
+        }
+      }
+
       if (peers.length > 0 && networkRoleRef.current === NETWORK_ROLE.CLIENT) {
         console.log('[Ludo] Sending JOIN_ROOM as client');
         connRef.current?.sendToAll(MESSAGE_TYPES.JOIN_ROOM, {
@@ -83,6 +143,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
             isReady: false,
             isHost: false,
             isConnected: true,
+            profilePic: playerProfilePicRef.current || null,
           }
         });
       }
@@ -106,11 +167,19 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
     };
 
-    if (!syncRef.current) {
-      syncRef.current = new SyncManager(connRef.current);
-    }
+    connRef.current.onPeerDisconnected = (peerId) => {
+      console.log('[Ludo] Peer disconnected (LWT/immediate):', peerId.slice(0, 8) + '...');
+      const currentLobby = lobbyRef.current;
+      const playerEntry = currentLobby?.players.find(p => p.id === peerId);
+      if (playerEntry) {
+        setDisconnectNotice(`${playerEntry.name} disconnected`);
+      }
+    };
+
+    syncRef.current = new SyncManager(connRef.current);
 
     syncRef.current.onStateUpdate = (state) => {
+      gameStateRef.current = state;
       if (onGameStateReceived) onGameStateReceived(state);
     };
 
@@ -135,11 +204,6 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     });
 
     connRef.current.onMessageType(MESSAGE_TYPES.PLAYER_LEFT, (data, _pId) => {
-      setLobby(prev => {
-        const updated = removePlayerFromLobby(prev, data.playerId);
-        lobbyRef.current = updated;
-        return updated;
-      });
       const currentLobby = lobbyRef.current;
       if (currentLobby && data.playerId) {
         const colors = ['red', 'green', 'yellow', 'blue'];
@@ -149,6 +213,11 @@ export function NetworkProvider({ children, onGameStateReceived }) {
           syncRef.current.handlePlayerDisconnect(playerColor);
         }
       }
+      setLobby(prev => {
+        const updated = removePlayerFromLobby(prev, data.playerId);
+        lobbyRef.current = updated;
+        return updated;
+      });
     });
 
     connRef.current.onMessageType(MESSAGE_TYPES.READY_CHANGED, (data, _pId) => {
@@ -167,8 +236,10 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     connRef.current.onMessageType(MESSAGE_TYPES.GAME_STATE_SYNC, (data, _pId) => {
       if (data.state && onGameStateReceived) {
         const deserialized = deserializeGameState(data.state);
+        const corrected = _correctTurnTimer(deserialized, data.timestamp);
         console.log('[Ludo] GAME_STATE_SYNC received (phase:', deserialized.gamePhase, ', sequence:', data.sequence || 0, ')');
-        onGameStateReceived({ ...deserialized, sequence: data.sequence || 0 });
+        gameStateRef.current = corrected;
+        onGameStateReceived({ ...corrected, sequence: data.sequence || 0 });
       }
     });
 
@@ -177,7 +248,9 @@ export function NetworkProvider({ children, onGameStateReceived }) {
         syncRef.current._sendFullStateTo(peerId);
       } else if (data.state && onGameStateReceived) {
         const deserialized = deserializeGameState(data.state);
-        onGameStateReceived({ ...deserialized, sequence: data.sequence || 0 });
+        const corrected = _correctTurnTimer(deserialized, data.timestamp);
+        gameStateRef.current = corrected;
+        onGameStateReceived({ ...corrected, sequence: data.sequence || 0 });
       }
     });
 
@@ -195,14 +268,21 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       }
     });
 
+    connRef.current.onMessageType(MESSAGE_TYPES.PROFILE_UPDATE, (data, _pId) => {
+      if (!data || !data.playerId) return;
+      setLobby(prev => updatePlayerProfilePic(prev, data.playerId, data.profilePic || null));
+      lobbyRef.current = updatePlayerProfilePic(lobbyRef.current, data.playerId, data.profilePic || null);
+    });
+
     return { peerId, isHost: connRef.current.isHost() };
   }, [onGameStateReceived, _stopJoinRetry]);
 
-  const createRoom = useCallback((playerName, maxPlayers) => {
+  const createRoom = useCallback((playerName, maxPlayers, profilePic) => {
     const code = generateRoomCode();
     networkRoleRef.current = NETWORK_ROLE.HOST;
+    playerProfilePicRef.current = profilePic || null;
     console.log(`[Ludo] Creating room ${code} as HOST (maxPlayers=${maxPlayers})`);
-    const { peerId } = _setupConnection(code, playerName);
+    const { peerId } = _setupConnection(code, playerName, profilePic);
 
     hostPeerIdRef.current = peerId;
     setRoomCode(code);
@@ -217,6 +297,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       isReady: true,
       isHost: true,
       isConnected: true,
+      profilePic: profilePic || null,
     }];
     newLobby.hostId = peerId;
     newLobby.playerCount = 1;
@@ -226,15 +307,16 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     return code;
   }, [_setupConnection]);
 
-  const joinRoom = useCallback((code, playerName) => {
+  const joinRoom = useCallback((code, playerName, profilePic) => {
     if (!validateRoomCode(code)) {
       setNetworkError('Invalid room code format');
       return false;
     }
 
     networkRoleRef.current = NETWORK_ROLE.CLIENT;
+    playerProfilePicRef.current = profilePic || null;
     console.log(`[Ludo] Joining room ${code} as CLIENT`);
-    _setupConnection(code, playerName);
+    _setupConnection(code, playerName, profilePic);
     setRoomCode(code);
     setNetworkRole(NETWORK_ROLE.CLIENT);
     setIsMultiplayer(true);
@@ -253,6 +335,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
             isReady: false,
             isHost: false,
             isConnected: true,
+            profilePic: playerProfilePicRef.current || null,
           },
         });
       } else {
@@ -272,7 +355,12 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       connRef.current.leaveRoom();
     }
     connRef.current = null;
+    if (syncRef.current) syncRef.current.destroy();
     syncRef.current = null;
+    gameStateRef.current = null;
+    lobbyRef.current = null;
+    hostPeerIdRef.current = null;
+    playerIdRef.current = null;
     setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
     setNetworkRole(NETWORK_ROLE.NONE);
     setRoomCode(null);
@@ -280,6 +368,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     setIsMultiplayer(false);
     setPeerIds([]);
     setChatMessages([]);
+    setDisconnectNotice(null);
   }, [_stopJoinRetry]);
 
   const toggleReady = useCallback(() => {
@@ -301,6 +390,18 @@ export function NetworkProvider({ children, onGameStateReceived }) {
 
     syncRef.current.startGame(playerConfigs);
   }, [networkRole]);
+
+  const sendProfileUpdate = useCallback((profilePic) => {
+    if (!connRef.current || !playerIdRef.current) return;
+    playerProfilePicRef.current = profilePic || null;
+    const updatedLobby = updatePlayerProfilePic(lobbyRef.current, playerIdRef.current, profilePic || null);
+    lobbyRef.current = updatedLobby;
+    setLobby(updatedLobby);
+    connRef.current.sendToAll(MESSAGE_TYPES.PROFILE_UPDATE, {
+      playerId: playerIdRef.current,
+      profilePic: profilePic || null,
+    });
+  }, []);
 
   const networkRollDice = useCallback((playerId, diceValue) => {
     if (!connRef.current || !syncRef.current) return;
@@ -395,11 +496,15 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     return () => {
       window.removeEventListener('beforeunload', handleTabClose);
       window.removeEventListener('pagehide', handleTabClose);
+      _stopJoinRetry();
+      if (syncRef.current) syncRef.current.destroy();
+      syncRef.current = null;
       if (connRef.current) {
         connRef.current.leaveRoom();
       }
+      connRef.current = null;
     };
-  }, []);
+  }, [_stopJoinRetry]);
 
   useEffect(() => {
     if (networkError) {
@@ -416,10 +521,12 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     roomCode,
     lobby,
     networkError,
+    disconnectNotice,
     peerIds,
     myPlayerId,
     chatMessages,
     sendChatMessage,
+    sendProfileUpdate,
     createRoom,
     joinRoom,
     leaveRoom,
@@ -429,9 +536,9 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     networkSelectPiece,
     networkEndTurn,
     clearError: () => setNetworkError(null),
-  }), [isMultiplayer, networkRole, connectionStatus, roomCode, lobby, networkError, peerIds, myPlayerId, chatMessages,
+  }), [isMultiplayer, networkRole, connectionStatus, roomCode, lobby, networkError, disconnectNotice, peerIds, myPlayerId, chatMessages,
       createRoom, joinRoom, leaveRoom, toggleReady, startGame,
-      networkRollDice, networkSelectPiece, networkEndTurn, sendChatMessage]);
+      networkRollDice, networkSelectPiece, networkEndTurn, sendChatMessage, sendProfileUpdate]);
 
   return (
     <NetworkContext.Provider value={contextValue}>

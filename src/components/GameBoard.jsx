@@ -39,7 +39,7 @@ function getSelectableCells(availableMoves, players, currentTurn) {
     if (!piece) continue;
     if (piece.isHome) {
       const homePos = HOME_BASE_POSITIONS[player.color]?.[piece.id];
-      if (homePos) cells.add(`${homePos.row}-${homePos.col}`);
+      if (homePos) cells.add(`${Math.round(homePos.row)}-${Math.round(homePos.col)}`);
     } else {
       const coord = getPieceCoordinates(player.color, piece.position);
       if (coord) cells.add(`${coord.row}-${coord.col}`);
@@ -64,7 +64,7 @@ function GridOverlay({ selectableCells, handleSelectPiece, availableMoves, playe
           let pieceKey = null;
           if (piece.isHome) {
             const hp = HOME_BASE_POSITIONS[player.color]?.[piece.id];
-            if (hp) pieceKey = `${hp.row}-${hp.col}`;
+            if (hp) pieceKey = `${Math.round(hp.row)}-${Math.round(hp.col)}`;
           } else {
             const coord = getPieceCoordinates(player.color, piece.position);
             if (coord) pieceKey = `${coord.row}-${coord.col}`;
@@ -86,11 +86,8 @@ function GridOverlay({ selectableCells, handleSelectPiece, availableMoves, playe
           style={{ position: 'relative', minWidth: 0, minHeight: 0 }}
         >
           {isSelectable && (
-            <img
-              src="/textures/Highlight.png"
-              alt=""
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              style={{ opacity: 0.5 }}
+            <div
+              className="absolute inset-0 pointer-events-none rounded-[3px] cell-selectable"
             />
           )}
         </div>

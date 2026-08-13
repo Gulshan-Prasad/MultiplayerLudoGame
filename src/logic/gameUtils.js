@@ -39,37 +39,47 @@ export function getPieceCoordinates(playerColor, position) {
   return getCoord(playerColor, position);
 }
 
-function countAtCoord(state, coord, excludePlayerId) {
+function getCoordCounts(state, coord) {
   const key = coordKey(coord);
-  let count = 0;
-  let found = [];
+  const counts = {};
   for (const [pid, player] of Object.entries(state.players)) {
-    if (pid === excludePlayerId) continue;
     for (const piece of player.pieces) {
       if (piece.isFinished || piece.isHome) continue;
       if (piece.position < 0 || piece.position >= MAIN_PATH_LENGTH) continue;
       const pc = getCoord(player.color, piece.position);
       if (pc && coordKey(pc) === key) {
-        count++;
-        found.push({ playerId: pid, pieceId: piece.id });
+        counts[pid] = (counts[pid] || 0) + 1;
       }
     }
   }
-  return { count, found };
+  return counts;
 }
 
-export function isBlockOnPath(state, coord, movingPlayerId) {
-  const { count } = countAtCoord(state, coord, movingPlayerId);
-  if (count >= 2) return { blocked: true, reason: 'opponent_block', count };
-  return { blocked: false };
-}
-
-export function canKill(state, coord, movingPlayerId) {
-  if (!coord) return false;
-  if (SAFE_SPOT_COORDS.has(coordKey(coord))) return false;
-  const { count, found } = countAtCoord(state, coord, movingPlayerId);
-  if (count === 1) return found[0].playerId;
-  return false;
+/**
+ * Decide which opponent stacks get cut when `movingPlayerId` lands on `coord`.
+ * Rule (majority capture with stacking):
+ * - Any color may stack on a cell; landing is never blocked.
+ * - After the move, if the mover's total count on the cell is strictly greater
+ *   than an opponent's count, all of that opponent's pieces there are sent home.
+ * - Classic 1v1 is preserved: a single piece landing on a single opponent piece
+ *   still captures it.
+ * - Safe spots never cut; pieces may still stack there.
+ */
+export function getCutTargets(state, coord, movingPlayerId) {
+  if (!coord) return [];
+  const counts = getCoordCounts(state, coord);
+  const moverCount = (counts[movingPlayerId] || 0) + 1;
+  const targets = [];
+  for (const [pid, oppCount] of Object.entries(counts)) {
+    if (pid === movingPlayerId) continue;
+    if (SAFE_SPOT_COORDS.has(coordKey(coord))) continue;
+    if (moverCount === 1 && oppCount === 1) {
+      targets.push(pid);
+    } else if (moverCount > oppCount) {
+      targets.push(pid);
+    }
+  }
+  return targets;
 }
 
 function getMoveDestination(pos, dice) {
@@ -118,19 +128,16 @@ export function calculateMoves(state, playerId) {
     if (piece.isHome) {
       if (dice === 6) {
         const entryCoord = path[0];
-        const blockCheck = isBlockOnPath(state, entryCoord, playerId);
-        if (!blockCheck.blocked) {
-          possibleMoves.push({
-            pieceId: piece.id,
-            fromPosition: -1,
-            toPosition: 0,
-            destinationCoord: entryCoord,
-            killsPlayerId: canKill(state, entryCoord, playerId),
-            entersHomeStretch: false,
-            finishes: false,
-            types: ['release'],
-          });
-        }
+        possibleMoves.push({
+          pieceId: piece.id,
+          fromPosition: -1,
+          toPosition: 0,
+          destinationCoord: entryCoord,
+          killsPlayerIds: getCutTargets(state, entryCoord, playerId),
+          entersHomeStretch: false,
+          finishes: false,
+          types: ['release'],
+        });
       }
       continue;
     }
@@ -147,7 +154,7 @@ export function calculateMoves(state, playerId) {
         fromPosition: relPos,
         toPosition: newPos,
         destinationCoord: null,
-        killsPlayerId: false,
+        killsPlayerIds: [],
         entersHomeStretch: true,
         finishes: true,
         types: ['finish'],
@@ -156,60 +163,29 @@ export function calculateMoves(state, playerId) {
     }
 
     if (entersHomeStretch) {
-      let intermediateBlocked = false;
-      if (relPos < MAIN_PATH_LENGTH) {
-        const startCheck = relPos + 1;
-        const endCheck = Math.min(relPos + dice, MAIN_PATH_LENGTH);
-        for (let i = startCheck; i < endCheck; i++) {
-          const checkCoord = path[i];
-          const ib = isBlockOnPath(state, checkCoord, playerId);
-          if (ib.blocked) {
-            intermediateBlocked = true;
-            break;
-          }
-        }
-      }
-      if (!intermediateBlocked) {
-        possibleMoves.push({
-          pieceId: piece.id,
-          fromPosition: relPos,
-          toPosition: newPos,
-          destinationCoord: null,
-          killsPlayerId: false,
-          entersHomeStretch: true,
-          finishes: false,
-          types: ['homeStretch'],
-        });
-      }
+      possibleMoves.push({
+        pieceId: piece.id,
+        fromPosition: relPos,
+        toPosition: newPos,
+        destinationCoord: null,
+        killsPlayerIds: [],
+        entersHomeStretch: true,
+        finishes: false,
+        types: ['homeStretch'],
+      });
       continue;
     }
 
     if (relPos >= 0 && relPos < MAIN_PATH_LENGTH) {
       const destCoord = path[newPos];
-      const blockCheck = isBlockOnPath(state, destCoord, playerId);
-      if (blockCheck.blocked) continue;
-
-      let intermediateBlocked = false;
-      const startCheck = relPos + 1;
-      const endCheck = relPos + dice;
-      for (let i = startCheck; i < endCheck; i++) {
-        const checkCoord = path[i];
-        const ib = isBlockOnPath(state, checkCoord, playerId);
-        if (ib.blocked) {
-          intermediateBlocked = true;
-          break;
-        }
-      }
-      if (intermediateBlocked) continue;
-
-      const kills = canKill(state, destCoord, playerId);
+      const kills = getCutTargets(state, destCoord, playerId);
 
       possibleMoves.push({
         pieceId: piece.id,
         fromPosition: relPos,
         toPosition: newPos,
         destinationCoord: destCoord,
-        killsPlayerId: kills,
+        killsPlayerIds: kills,
         entersHomeStretch: false,
         finishes: false,
         types: ['move'],
@@ -241,10 +217,12 @@ export function executeMove(state, playerId, pieceId, move) {
   }
 
   const killed = [];
-  if (move.killsPlayerId && move.destinationCoord && !move.entersHomeStretch) {
+  const targetIds = move.killsPlayerIds || [];
+  if (targetIds.length > 0 && move.destinationCoord && !move.entersHomeStretch) {
     const destKey = coordKey(move.destinationCoord);
-    const victimPlayer = newState.players[move.killsPlayerId];
-    if (victimPlayer) {
+    for (const victimPid of targetIds) {
+      const victimPlayer = newState.players[victimPid];
+      if (!victimPlayer) continue;
       for (const vp of victimPlayer.pieces) {
         if (vp.isFinished || vp.isHome) continue;
         if (vp.position >= 0 && vp.position < MAIN_PATH_LENGTH) {
@@ -253,7 +231,7 @@ export function executeMove(state, playerId, pieceId, move) {
             vp.position = -1;
             vp.isHome = true;
             vp.isActive = false;
-            killed.push({ playerId: move.killsPlayerId, pieceId: vp.id });
+            killed.push({ playerId: victimPid, pieceId: vp.id });
           }
         }
       }
@@ -309,10 +287,14 @@ export function getRankings(state) {
     .map(([id, p]) => ({
       id,
       finishedCount: p.pieces.filter(pp => pp.isFinished).length,
+      isDisconnected: !!p.isDisconnected,
       name: p.name,
       color: p.color,
     }))
-    .sort((a, b) => b.finishedCount - a.finishedCount);
+    .sort((a, b) => {
+      if (a.isDisconnected !== b.isDisconnected) return a.isDisconnected ? 1 : -1;
+      return b.finishedCount - a.finishedCount;
+    });
 
   const rankings = [];
   let currentRank = 1;

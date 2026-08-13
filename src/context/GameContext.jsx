@@ -1,39 +1,20 @@
 import { createContext, useContext, useReducer, useCallback, useRef, useEffect } from 'react';
 import { gameReducer, initialState } from '../logic/gameReducer';
-import { GAME_PHASES, GAME_STATUS, STORAGE_KEY, TURN_TIMER_SECONDS } from '../data/constants';
+import { GAME_PHASES, GAME_STATUS, TURN_TIMER_SECONDS } from '../data/constants';
 
 const GameContext = createContext(null);
 
 export function GameProvider({ children }) {
-  const [state, dispatch] = useReducer(gameReducer, initialState, () => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.gameStatus === GAME_STATUS.IN_PROGRESS || parsed.gameStatus === GAME_STATUS.FINISHED) {
-          return { ...parsed, diceRolling: false };
-        }
-      }
-    } catch (e) { /* ignore */ }
-    return initialState;
-  });
+  const [state, dispatch] = useReducer(gameReducer, initialState);
 
   const timerRef = useRef(null);
   const animatingRef = useRef(false);
   const syncSequenceRef = useRef(0);
 
   useEffect(() => {
-    if (state.gameStatus === GAME_STATUS.IN_PROGRESS) {
-      try {
-        const toSave = { ...state, turnTimer: 0 };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-      } catch (e) { /* ignore */ }
-    }
-  }, [state.currentTurn, state.moveHistory.length, state.gameStatus]);
-
-  useEffect(() => {
     if (state.sequence != null) return;
-    if (state.gamePhase === GAME_PHASES.ROLLING && !state.diceRolling && state.gameStatus === GAME_STATUS.IN_PROGRESS) {
+    if ((state.gamePhase === GAME_PHASES.ROLLING || state.gamePhase === GAME_PHASES.TURN_COMPLETE)
+      && !state.diceRolling && state.gameStatus === GAME_STATUS.IN_PROGRESS) {
       timerRef.current = setTimeout(() => {
         dispatch({ type: 'TIMEOUT_TURN' });
       }, TURN_TIMER_SECONDS * 1000);
@@ -94,6 +75,10 @@ export function GameProvider({ children }) {
     dispatch({ type: 'RESET_GAME' });
   }, []);
 
+  const resetState = useCallback(() => {
+    dispatch({ type: 'RESET_STATE' });
+  }, []);
+
   const hydrateState = useCallback((newState) => {
     if (!newState) return;
     const seq = newState.sequence || 0;
@@ -114,6 +99,7 @@ export function GameProvider({ children }) {
     loadGame,
     undoMove,
     resetGame,
+    resetState,
     hydrateState,
     animatingRef,
   };

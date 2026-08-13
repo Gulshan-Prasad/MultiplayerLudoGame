@@ -49,10 +49,81 @@
   animation: pulse-glow 1s ease-in-out infinite;
 }
 
+/* ============================================================
+   Piece highlights — glow + outline that follows the piece shape
+   ============================================================ */
+
+/* Selectable piece: subtle golden glow (minimalist) */
+.piece-selectable {
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.9));
+  animation: piece-selectable-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes piece-selectable-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.55)); }
+  50% { filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.9)); }
+}
+
+/* Selected piece: crisp soft white ring */
+.piece-selected {
+  filter:
+    drop-shadow(0 0 2px rgba(255, 255, 255, 0.9))
+    drop-shadow(0 0 6px rgba(255, 255, 255, 0.55));
+  transform: scale(1.06);
+}
+
+/* Selectable cell: thin ring + faint halo (replaces the dark highlight tile) */
+.cell-selectable {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 215, 0, 0.14) 0%,
+    rgba(255, 215, 0, 0) 72%
+  );
+  box-shadow: inset 0 0 0 1.5px rgba(255, 215, 0, 0.55);
+}
+
 @keyframes shake {
   0%, 100% { transform: rotate(0deg); }
   25% { transform: rotate(-8deg); }
   75% { transform: rotate(8deg); }
+}
+
+/* Rolling die: tumble + rattle */
+@keyframes dice-roll {
+  0% { transform: rotate(0deg) translateY(0) scale(1); }
+  15% { transform: rotate(-14deg) translateY(-8%) scale(1.06); }
+  30% { transform: rotate(10deg) translateY(4%) scale(0.96); }
+  45% { transform: rotate(-10deg) translateY(-6%) scale(1.04); }
+  60% { transform: rotate(16deg) translateY(6%) scale(0.97); }
+  75% { transform: rotate(-8deg) translateY(-4%) scale(1.03); }
+  90% { transform: rotate(6deg) translateY(2%) scale(0.99); }
+  100% { transform: rotate(0deg) translateY(0) scale(1); }
+}
+
+.animate-dice-roll {
+  animation: dice-roll 0.45s ease-in-out infinite;
+}
+
+/* Die landing: settle with a bounce */
+@keyframes dice-land {
+  0% { transform: scale(1.35) rotate(8deg); }
+  40% { transform: scale(0.92) rotate(-3deg); }
+  70% { transform: scale(1.08) rotate(1deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.animate-dice-land {
+  animation: dice-land 0.35s ease-out;
+}
+
+/* Idle wiggle: subtle invitation to roll */
+@keyframes dice-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-5deg) translateY(-3%); }
+}
+
+.animate-dice-wiggle {
+  animation: dice-wiggle 1.2s ease-in-out infinite;
 }
 
 @keyframes fadeIn {
@@ -71,4 +142,518 @@
 
 .animate-slideUp {
   animation: slideUp 0.4s ease-out;
+}
+
+/* ============================================================
+   Classic Board Game theme
+   Solid colors only — no transparent gradients, no translucency.
+   ============================================================ */
+
+:root {
+  --felt-light: #0d442b;
+  --felt-dark: #0a331e;
+  --felt-rim: #082a19;
+  --cream: #fdf1dc;
+  --cream-dark: #ecdcba;
+  --cream-line: #e3d0a8;
+  --wood-dark: #3e2416;
+  --wood-shadow: #1e1109;
+  --brown: #5b3a1e;
+  --brown-mid: #7a5c36;
+  --brown-soft: #9a8b6e;
+  --gold: #d4a017;
+  --gold-dark: #9c7a0e;
+  --green: #2f9e44;
+  --green-dark: #1b6b2e;
+  --blue: #1d7dd1;
+  --blue-dark: #12559a;
+  --red: #d64545;
+  --red-dark: #93302f;
+  --amber: #e8a020;
+  --amber-dark: #a96f0d;
+  --purple: #7b4bb0;
+  --purple-dark: #52307a;
+  --gray: #6e7b85;
+  --gray-dark: #45525c;
+}
+
+/* Felt table background with an opaque checkerboard tile pattern */
+.page-bg {
+  background-color: var(--felt-dark);
+  background-image: repeating-conic-gradient(
+    var(--felt-light) 0% 25%,
+    var(--felt-dark) 0% 50%
+  );
+  background-size: 56px 56px;
+}
+
+/* Classic game-box panels: parchment + thick wood border + hard offset shadow */
+.panel-classic {
+  background-color: var(--cream);
+  border: 4px solid var(--wood-dark);
+  border-radius: 16px;
+  box-shadow:
+    8px 8px 0 var(--wood-shadow),
+    0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.card-classic {
+  background-color: var(--cream);
+  border: 3px solid var(--wood-dark);
+  border-radius: 12px;
+  box-shadow:
+    4px 4px 0 var(--wood-shadow),
+    0 8px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* Typography */
+.game-title {
+  color: var(--brown);
+  text-shadow:
+    2px 2px 0 rgba(255, 255, 255, 0.6),
+    3px 3px 0 rgba(0, 0, 0, 0.15);
+}
+
+.game-title-gold {
+  color: var(--gold);
+  text-shadow:
+    2px 2px 0 var(--gold-dark),
+    3px 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.link-classic {
+  color: var(--brown-mid);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+.link-classic:hover {
+  color: var(--gold-dark);
+}
+
+/* ============================================================
+   3D Buttons — raised bevel, hard depth shadow, real press effect
+   ============================================================ */
+.btn-3d {
+  --btn: var(--green);
+  --btn-shadow: var(--green-dark);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  background-color: var(--btn);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.25),
+    0 5px 0 var(--btn-shadow),
+    0 9px 14px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease,
+    filter 0.15s ease;
+}
+
+.btn-3d:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.25),
+    0 7px 0 var(--btn-shadow),
+    0 11px 16px rgba(0, 0, 0, 0.4);
+}
+
+.btn-3d:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.2),
+    0 2px 0 var(--btn-shadow),
+    0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.btn-3d:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.7) brightness(0.85);
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.15),
+    0 3px 0 rgba(0, 0, 0, 0.25),
+    0 5px 8px rgba(0, 0, 0, 0.25);
+}
+
+.btn-3d:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Chat floating button — overrides .btn-3d's position: relative so it stays
+   fixed to the viewport bottom-right */
+.chat-fab {
+  position: fixed !important;
+  bottom: 4.5rem;
+  right: 1.25rem;
+  z-index: 50;
+}
+
+.btn-3d-green { --btn: var(--green); --btn-shadow: var(--green-dark); }
+.btn-3d-blue { --btn: var(--blue); --btn-shadow: var(--blue-dark); }
+.btn-3d-red { --btn: var(--red); --btn-shadow: var(--red-dark); }
+.btn-3d-amber { --btn: var(--amber); --btn-shadow: var(--amber-dark); }
+.btn-3d-gold { --btn: var(--gold); --btn-shadow: var(--gold-dark); }
+.btn-3d-purple { --btn: var(--purple); --btn-shadow: var(--purple-dark); }
+.btn-3d-gray { --btn: var(--gray); --btn-shadow: var(--gray-dark); }
+.btn-3d-cream {
+  --btn: #e7d5ac;
+  --btn-shadow: #a89363;
+  color: var(--brown);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Sizes */
+.btn-lg { padding: 0.9rem 1.25rem; font-size: 1.05rem; }
+.btn-md { padding: 0.6rem 1rem; font-size: 0.9rem; border-radius: 10px; }
+.btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; border-radius: 9px; }
+.btn-block { width: 100%; }
+
+/* Classic inputs */
+.input-classic {
+  width: 100%;
+  background-color: #ffffff;
+  border: 3px solid #8a6a45;
+  border-radius: 10px;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+  color: var(--brown);
+  font-size: 0.9rem;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.input-classic:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.08),
+    0 0 0 3px rgba(212, 160, 23, 0.35);
+}
+.input-classic::placeholder {
+  color: #a99a7c;
+}
+
+/* Cool name input — sits inside a raised 3D plate (see CoolNameInput.jsx) */
+.cool-name-input {
+  position: relative;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.55);
+  border: 2px solid rgba(90, 58, 30, 0.25);
+  border-radius: 0.65rem;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+.cool-name-input:focus {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 3px rgba(212, 160, 23, 0.35),
+    inset 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.cool-name-input::placeholder {
+  color: #b3a27f;
+  font-weight: 500;
+}
+.cool-name-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Profile picture picker (ProfilePicturePicker.jsx) */
+.profile-picker {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.profile-avatar-btn {
+  position: relative;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 1rem;
+  padding: 0;
+  cursor: pointer;
+  background: linear-gradient(180deg, #fff3d6 0%, #e8c888 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 3px 0 var(--gold-dark),
+    0 6px 12px rgba(0, 0, 0, 0.25),
+    inset 0 0 0 1px rgba(90, 58, 30, 0.15);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.profile-avatar-btn:hover:not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--gold-dark),
+    0 8px 16px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(90, 58, 30, 0.15);
+}
+.profile-avatar-btn:active:not(.disabled) {
+  transform: translateY(0);
+  box-shadow:
+    0 2px 0 var(--gold-dark),
+    0 3px 8px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px rgba(90, 58, 30, 0.15);
+}
+.profile-avatar-btn.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.profile-avatar-badge {
+  position: absolute;
+  right: -0.35rem;
+  bottom: -0.35rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f5b942 0%, #c98a12 100%);
+  border: 2px solid #fff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.profile-picker-popover {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  left: 0;
+  z-index: 60;
+  width: 13rem;
+  animation: profilePopIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform-origin: bottom left;
+}
+
+@keyframes profilePopIn {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.profile-picker-popover::after {
+  content: '';
+  position: absolute;
+  bottom: -9px;
+  left: 22px;
+  width: 0;
+  height: 0;
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  border-top: 12px solid var(--gold-dark);
+  filter: drop-shadow(0 5px 4px rgba(0, 0, 0, 0.25));
+}
+
+.profile-picker-panel {
+  width: 100%;
+  max-height: 13rem;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #fffdf4 0%, #f7ecd3 100%);
+  border: 2px solid var(--gold);
+  border-radius: 1rem;
+  box-shadow:
+    0 3px 0 var(--gold-dark),
+    0 12px 28px rgba(0, 0, 0, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -3px 8px rgba(0, 0, 0, 0.06);
+  padding: 0.6rem;
+}
+.profile-picker-panel::-webkit-scrollbar {
+  width: 8px;
+}
+.profile-picker-panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+}
+.profile-picker-panel::-webkit-scrollbar-thumb {
+  background: var(--gold);
+  border-radius: 999px;
+}
+
+.profile-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.profile-picker-option {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border-radius: 0.65rem;
+  overflow: hidden;
+  cursor: pointer;
+  border: 3px solid transparent;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.profile-picker-option:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+.profile-picker-option.selected {
+  border-color: var(--gold-dark);
+  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.35), 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+.profile-picker-option img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 2px;
+}
+
+.profile-picker-empty {
+  text-align: center;
+  font-size: 0.72rem;
+  color: #a08b5c;
+  line-height: 1.5;
+  padding: 0.6rem 0.4rem;
+}
+
+.profile-picker-upload-row {
+  margin-bottom: 0.6rem;
+}
+
+.profile-picker-upload-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #5b3a1e;
+  background: linear-gradient(180deg, #fff3d6 0%, #e8c888 100%);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0.7rem;
+  cursor: pointer;
+  box-shadow:
+    0 2px 0 var(--gold-dark),
+    0 4px 8px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px rgba(90, 58, 30, 0.12);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.profile-picker-upload-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 3px 0 var(--gold-dark),
+    0 6px 12px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px rgba(90, 58, 30, 0.12);
+}
+.profile-picker-upload-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    0 1px 0 var(--gold-dark),
+    0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Player panels — columns follow the player count so 2/3/4 players all span
+   the full width. Set via --player-count on the element. */
+.player-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--player-count, 4), minmax(0, 1fr));
+}
+@media (max-width: 479px) {
+  .player-grid {
+    grid-template-columns: repeat(min(var(--player-count, 4), 2), minmax(0, 1fr));
+  }
+}
+
+/* Badges / chips */
+.badge-classic {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.3;
+  border: 2px solid;
+}
+
+/* Room code plate */
+.room-code-classic {
+  background-color: #ffffff;
+  border: 3px dashed var(--gold);
+  border-radius: 12px;
+  color: var(--brown);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.2em;
+  font-weight: 800;
+}
+
+/* 3D die */
+.dice-3d {
+  background-color: #ffffff;
+  border: 3px solid var(--gold-dark);
+  border-radius: 20%;
+  box-shadow:
+    inset 0 0 0 2px #ffffff,
+    inset 0 -6px 0 rgba(212, 160, 23, 0.25),
+    0 6px 0 var(--gold-dark),
+    0 10px 16px rgba(0, 0, 0, 0.4);
+}
+
+.dice-3d-idle {
+  filter: grayscale(0.35);
+  box-shadow:
+    inset 0 0 0 2px #ffffff,
+    0 3px 0 #b0893f,
+    0 6px 10px rgba(0, 0, 0, 0.3);
 }

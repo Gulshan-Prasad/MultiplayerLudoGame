@@ -15,6 +15,7 @@ export function serializeGameState(state) {
     playerOrder: state.playerOrder,
     availableMoves: state.availableMoves || [],
     selectedPiece: state.selectedPiece || null,
+    turnTimer: state.turnTimer || 0,
   };
 }
 
@@ -57,6 +58,7 @@ export function deserializeGameState(data) {
     playerOrder: data.playerOrder || [],
     availableMoves: data.availableMoves || [],
     selectedPiece: data.selectedPiece || null,
+    turnTimer: data.turnTimer || 0,
   };
 }
 
@@ -108,7 +110,7 @@ export function serializeMove(move) {
     fromPosition: move.fromPosition,
     toPosition: move.toPosition,
     destinationAbs: move.destinationAbs,
-    killsPlayerId: move.killsPlayerId,
+    killsPlayerIds: move.killsPlayerIds || [],
     entersHomeStretch: move.entersHomeStretch,
     finishes: move.finishes,
     types: move.types,
