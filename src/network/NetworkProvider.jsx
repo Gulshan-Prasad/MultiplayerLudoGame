@@ -7,6 +7,7 @@ import { generateRoomCode, validateRoomCode, createDefaultLobby, addPlayerToLobb
 import { deserializeGameState } from './GameSerializer';
 import { CONNECTION_STATUS, NETWORK_ROLE } from './NetworkConstants';
 import { GAME_PHASES, GAME_STATUS } from '../data/constants';
+import { playSound } from '../utils/sound';
 
 const _correctTurnTimer = (state, hostBroadcastTimestamp) => {
   if (!state || !state.turnTimer) return state;
@@ -25,6 +26,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
   const [peerIds, setPeerIds] = useState([]);
   const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [myPlayerId, setMyPlayerId] = useState(null);
+  const [kicked, setKicked] = useState(false);
 
   const connRef = useRef(null);
   const syncRef = useRef(null);
@@ -106,11 +108,8 @@ export function NetworkProvider({ children, onGameStateReceived }) {
         && leftPeerIds.includes(hostPeerIdRef.current)) {
         const last = gameStateRef.current;
         if (last && last.gameStatus === GAME_STATUS.IN_PROGRESS && last.players) {
-          const colors = ['red', 'green', 'yellow', 'blue'];
-          const myLobbyIndex = currentLobby
-            ? currentLobby.players.findIndex(p => p.id === myId)
-            : -1;
-          const myColor = myLobbyIndex >= 0 ? colors[myLobbyIndex] : null;
+          const me = currentLobby ? currentLobby.players.find(p => p.id === myId) : null;
+          const myColor = me ? me.color : null;
           if (myColor && last.players[myColor]) {
             const players = JSON.parse(JSON.stringify(last.players));
             players[myColor].isWinner = true;
@@ -239,7 +238,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
         const corrected = _correctTurnTimer(deserialized, data.timestamp);
         console.log('[Ludo] GAME_STATE_SYNC received (phase:', deserialized.gamePhase, ', sequence:', data.sequence || 0, ')');
         gameStateRef.current = corrected;
-        onGameStateReceived({ ...corrected, sequence: data.sequence || 0 });
+        onGameStateReceived({ ...corrected, sequence: data.sequence || 0, reason: data.reason || null });
       }
     });
 
@@ -250,21 +249,53 @@ export function NetworkProvider({ children, onGameStateReceived }) {
         const deserialized = deserializeGameState(data.state);
         const corrected = _correctTurnTimer(deserialized, data.timestamp);
         gameStateRef.current = corrected;
-        onGameStateReceived({ ...corrected, sequence: data.sequence || 0 });
+        onGameStateReceived({ ...corrected, sequence: data.sequence || 0, reason: null });
       }
     });
 
     connRef.current.onMessageType(MESSAGE_TYPES.REJECTED, (data, _pId) => {
       setNetworkError(data.message || 'Action rejected');
+      playSound('error');
+    });
+
+    connRef.current.onMessageType(MESSAGE_TYPES.REMATCH_REQUEST, (data, _pId) => {
+      if (networkRoleRef.current !== NETWORK_ROLE.HOST) return;
+      if (data.playerId === hostPeerIdRef.current) return;
+      if (syncRef.current) {
+        syncRef.current.restartGame();
+      }
+    });
+
+    connRef.current.onMessageType(MESSAGE_TYPES.KICK_PLAYER, (data, _pId) => {
+      if (!data || data.targetId !== playerIdRef.current) return;
+      setKicked(true);
+      playSound('kick');
+      _stopJoinRetry();
+      if (connRef.current) connRef.current.leaveRoom();
+      connRef.current = null;
+      if (syncRef.current) syncRef.current.destroy();
+      syncRef.current = null;
+      gameStateRef.current = null;
+      lobbyRef.current = null;
+      hostPeerIdRef.current = null;
+      setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
+      setNetworkRole(NETWORK_ROLE.NONE);
+      setRoomCode(null);
+      setLobby(null);
+      setIsMultiplayer(false);
+      setPeerIds([]);
+      setChatMessages([]);
     });
 
     connRef.current.onMessageType(MESSAGE_TYPES.ERROR, (data, _pId) => {
       setNetworkError(data.message || 'Network error');
+      playSound('error');
     });
 
     connRef.current.onMessageType(MESSAGE_TYPES.CHAT_MESSAGE, (data, _pId) => {
       if (data.senderId !== playerIdRef.current) {
         setChatMessages(prev => [...prev, data]);
+        playSound('chat_message');
       }
     });
 
@@ -369,6 +400,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     setPeerIds([]);
     setChatMessages([]);
     setDisconnectNotice(null);
+    setKicked(false);
   }, [_stopJoinRetry]);
 
   const toggleReady = useCallback(() => {
@@ -403,7 +435,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     });
   }, []);
 
-  const networkRollDice = useCallback((playerId, diceValue) => {
+  const networkRollDice = useCallback((playerId) => {
     if (!connRef.current || !syncRef.current) return;
     if (networkRole === NETWORK_ROLE.HOST) {
       const state = syncRef.current.getState();
@@ -411,9 +443,9 @@ export function NetworkProvider({ children, onGameStateReceived }) {
         setNetworkError('Cannot roll right now');
         return;
       }
-      syncRef.current._handleRollRequest({ playerId, diceValue }, connRef.current.myPeerId);
+      syncRef.current._handleRollRequest({ playerId }, connRef.current.myPeerId);
     } else {
-      connRef.current.sendToPeer(MESSAGE_TYPES.ROLL_REQUEST, { playerId, diceValue }, hostPeerIdRef.current);
+      connRef.current.sendToPeer(MESSAGE_TYPES.ROLL_REQUEST, { playerId }, hostPeerIdRef.current);
     }
   }, [networkRole]);
 
@@ -460,6 +492,37 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     }
   }, [networkRole]);
 
+  const rematch = useCallback(() => {
+    if (!syncRef.current) return;
+    if (networkRole !== NETWORK_ROLE.HOST) return;
+    syncRef.current.restartGame();
+  }, [networkRole]);
+
+  const requestRematch = useCallback(() => {
+    if (!connRef.current || !playerIdRef.current) return;
+    if (networkRole === NETWORK_ROLE.HOST) return;
+    connRef.current.sendToPeer(MESSAGE_TYPES.REMATCH_REQUEST, {
+      playerId: playerIdRef.current,
+    }, hostPeerIdRef.current);
+  }, [networkRole]);
+
+  const requestFullState = useCallback(() => {
+    if (!connRef.current || !hostPeerIdRef.current) return;
+    if (networkRole !== NETWORK_ROLE.CLIENT) return;
+    connRef.current.sendToPeer(MESSAGE_TYPES.FULL_STATE_SYNC, { request: true }, hostPeerIdRef.current);
+  }, [networkRole]);
+
+  const kickPlayer = useCallback((targetId) => {
+    if (!connRef.current) return;
+    if (networkRole !== NETWORK_ROLE.HOST) return;
+    connRef.current.sendToAll(MESSAGE_TYPES.KICK_PLAYER, { targetId });
+  }, [networkRole]);
+
+  const clearKicked = useCallback(() => {
+    setKicked(false);
+    setNetworkError(null);
+  }, []);
+
   useEffect(() => {
     lobbyRef.current = lobby;
   }, [lobby]);
@@ -469,11 +532,8 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       setMyPlayerId(null);
       return;
     }
-    const myLobbyIndex = lobby.players.findIndex(p => p.id === playerIdRef.current);
-    if (myLobbyIndex >= 0) {
-      const colors = ['red', 'green', 'yellow', 'blue'];
-      setMyPlayerId(colors[myLobbyIndex]);
-    }
+    const me = lobby.players.find(p => p.id === playerIdRef.current);
+    setMyPlayerId(me ? me.color : null);
   }, [lobby]);
 
   useEffect(() => {
@@ -483,10 +543,10 @@ export function NetworkProvider({ children, onGameStateReceived }) {
           connRef.current.sendToAll(MESSAGE_TYPES.PLAYER_LEFT, {
             playerId: playerIdRef.current,
           });
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
         try {
           connRef.current.leaveRoom();
-        } catch (e) { /* ignore */ }
+        } catch { /* ignore */ }
       }
     };
 
@@ -524,6 +584,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     disconnectNotice,
     peerIds,
     myPlayerId,
+    kicked,
     chatMessages,
     sendChatMessage,
     sendProfileUpdate,
@@ -535,10 +596,16 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     networkRollDice,
     networkSelectPiece,
     networkEndTurn,
+    rematch,
+    requestRematch,
+    requestFullState,
+    kickPlayer,
+    clearKicked,
     clearError: () => setNetworkError(null),
-  }), [isMultiplayer, networkRole, connectionStatus, roomCode, lobby, networkError, disconnectNotice, peerIds, myPlayerId, chatMessages,
+  }), [isMultiplayer, networkRole, connectionStatus, roomCode, lobby, networkError, disconnectNotice, peerIds, myPlayerId, kicked, chatMessages,
       createRoom, joinRoom, leaveRoom, toggleReady, startGame,
-      networkRollDice, networkSelectPiece, networkEndTurn, sendChatMessage, sendProfileUpdate]);
+      networkRollDice, networkSelectPiece, networkEndTurn, sendChatMessage, sendProfileUpdate,
+      rematch, requestRematch, requestFullState, kickPlayer, clearKicked]);
 
   return (
     <NetworkContext.Provider value={contextValue}>

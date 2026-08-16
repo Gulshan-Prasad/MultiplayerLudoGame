@@ -8,20 +8,31 @@ const PIECE_IMAGES = {
   blue: '/textures/pieces/BluePlayer.png',
 };
 
+const PIECE_IMAGES_HIGHLIGHTED = {
+  red: '/textures/pieces/RedPlayerHighlighted.png',
+  green: '/textures/pieces/GreenPlayerHighlighted.png',
+  yellow: '/textures/pieces/YellowPlayerHighlighted.png',
+  blue: '/textures/pieces/BluePlayerHighlighted.png',
+};
+
 const CELL_FRACTION = 1 / BOARD_SIZE;
-const PIECE_SIZE_FRACTION = 1.0;
+const PIECE_SIZE_FRACTION = 0.85;
+// Small nudge upward (as a fraction of a cell) so pieces sit slightly above
+// the cell center.
+const PIECE_TOP_OFFSET = 0.07;
 const PIECE_SIZE = `${(PIECE_SIZE_FRACTION * CELL_FRACTION * 100).toFixed(3)}%`;
 
 function Piece({ playerColor, piece, isSelectable, isSelected, justMoved, onClick, cellRow, cellCol, offsetX = 0, offsetY = 0 }) {
   const isFinished = piece.isFinished;
+  const isHighlighted = isSelectable || isSelected;
 
   const left = `calc(${cellCol} * ${CELL_FRACTION * 100}% + 50% * ${CELL_FRACTION} + ${offsetX * CELL_FRACTION * 100}% - ${PIECE_SIZE} / 2)`;
-  const top = `calc(${cellRow} * ${CELL_FRACTION * 100}% + 50% * ${CELL_FRACTION} + ${offsetY * CELL_FRACTION * 100}% - ${PIECE_SIZE} / 2)`;
+  const top = `calc(${cellRow} * ${CELL_FRACTION * 100}% + 50% * ${CELL_FRACTION} + ${offsetY * CELL_FRACTION * 100}% - ${PIECE_SIZE} / 2 - ${PIECE_TOP_OFFSET * CELL_FRACTION * 100}%)`;
 
   const glowClass = isSelected
-    ? 'piece-selected cursor-pointer'
+    ? 'piece-highlighted cursor-pointer'
     : isSelectable
-    ? 'piece-selectable cursor-pointer hover:scale-110'
+    ? 'piece-highlighted cursor-pointer hover:scale-110'
     : justMoved
     ? 'drop-shadow-[0_0_6px_rgba(255,215,0,0.8)] scale-105'
     : '';
@@ -30,7 +41,7 @@ function Piece({ playerColor, piece, isSelectable, isSelected, justMoved, onClic
 
   return (
     <img
-      src={PIECE_IMAGES[playerColor]}
+      src={isHighlighted ? PIECE_IMAGES_HIGHLIGHTED[playerColor] : PIECE_IMAGES[playerColor]}
       alt={`${playerColor} piece ${piece.id + 1}`}
       className={`absolute ${glowClass} ${animClass} transition-all duration-300 pointer-events-auto`}
       style={{

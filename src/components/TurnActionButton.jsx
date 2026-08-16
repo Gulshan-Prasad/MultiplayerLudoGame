@@ -3,7 +3,7 @@ import { useGame } from '../context/GameContext';
 import { GAME_PHASES, GAME_STATUS } from '../data/constants';
 import CooldownBarButton from './CooldownBarButton';
 
-function TurnActionButton({ onRoll, onEndTurn, showCooldown = false, isActive = true, waitingName = '' }) {
+function TurnActionButton({ onRoll, showCooldown = false, isActive = true, waitingName = '' }) {
   const { state } = useGame();
   const { gamePhase, gameStatus, diceRolling, turnTimer } = state;
 
@@ -34,6 +34,7 @@ function TurnActionButton({ onRoll, onEndTurn, showCooldown = false, isActive = 
         cooldownActive={cooldownActive}
         fillColor="var(--blue)"
         className={className}
+        taller
       >
         🎲 Roll Dice
       </CooldownBarButton>
@@ -71,13 +72,13 @@ function TurnActionButton({ onRoll, onEndTurn, showCooldown = false, isActive = 
   if (gamePhase === GAME_PHASES.TURN_COMPLETE) {
     return (
       <CooldownBarButton
-        onClick={onEndTurn}
+        disabled
         turnTimer={turnTimer}
-        cooldownActive={cooldownActive}
+        cooldownActive={false}
         fillColor="var(--green)"
         className={className}
       >
-        End Turn →
+        Turn passing…
       </CooldownBarButton>
     );
   }

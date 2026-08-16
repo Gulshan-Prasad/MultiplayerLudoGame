@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useCallback, useRef, useEffect } from 'react';
 import { gameReducer, initialState } from '../logic/gameReducer';
-import { GAME_PHASES, GAME_STATUS, TURN_TIMER_SECONDS } from '../data/constants';
+import { GAME_PHASES, GAME_STATUS, TURN_TIMER_SECONDS, TURN_COMPLETE_AUTO_ADVANCE_MS, DICE_ROLL_RESOLVE_MS } from '../data/constants';
 
 const GameContext = createContext(null);
 
@@ -15,9 +15,14 @@ export function GameProvider({ children }) {
     if (state.sequence != null) return;
     if ((state.gamePhase === GAME_PHASES.ROLLING || state.gamePhase === GAME_PHASES.TURN_COMPLETE)
       && !state.diceRolling && state.gameStatus === GAME_STATUS.IN_PROGRESS) {
+      // TURN_COMPLETE auto-advances quickly (no End Turn button anymore) so the
+      // piece animation plays out before the next player rolls.
+      const delay = state.gamePhase === GAME_PHASES.TURN_COMPLETE
+        ? TURN_COMPLETE_AUTO_ADVANCE_MS
+        : TURN_TIMER_SECONDS * 1000;
       timerRef.current = setTimeout(() => {
         dispatch({ type: 'TIMEOUT_TURN' });
-      }, TURN_TIMER_SECONDS * 1000);
+      }, delay);
       return () => clearTimeout(timerRef.current);
     }
     if (state.diceRolling) {
@@ -35,10 +40,12 @@ export function GameProvider({ children }) {
     if (state.diceRolling) return;
     animatingRef.current = true;
     dispatch({ type: 'ROLL_DICE' });
+    // Wait for the die to finish rolling/settling before the piece moves, so
+    // the move animation never overlaps the roll.
     setTimeout(() => {
       dispatch({ type: 'DICE_ANIMATION_DONE' });
       animatingRef.current = false;
-    }, 800);
+    }, DICE_ROLL_RESOLVE_MS);
   }, [state.gamePhase, state.diceRolling]);
 
   const selectPiece = useCallback((pieceId) => {

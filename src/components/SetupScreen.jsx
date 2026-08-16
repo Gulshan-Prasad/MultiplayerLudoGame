@@ -1,7 +1,7 @@
-import { useState, memo, useCallback } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { PLAYER_COLORS, STORAGE_KEY } from '../data/constants';
+import { PLAYER_COLORS, STORAGE_KEY, PLAYER_NAMES_STORAGE_KEY } from '../data/constants';
 import CoolNameInput from './CoolNameInput';
 
 const PIECE_IMAGES = {
@@ -15,10 +15,27 @@ function SetupScreen() {
   const navigate = useNavigate();
   const { startGame, loadGame } = useGame();
   const [playerCount, setPlayerCount] = useState(4);
-  const [playerNames, setPlayerNames] = useState(['Red', 'Green', 'Yellow', 'Blue']);
+  const [playerNames, setPlayerNames] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PLAYER_NAMES_STORAGE_KEY) || 'null');
+      if (Array.isArray(saved) && saved.length === PLAYER_COLORS.length) return saved;
+    } catch {
+      // ignore malformed saved names
+    }
+    return ['Red', 'Green', 'Yellow', 'Blue'];
+  });
   const [error, setError] = useState('');
 
   const savedGameExists = !!localStorage.getItem(STORAGE_KEY);
+
+  // Remember the names locally so the user doesn't have to retype them.
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAYER_NAMES_STORAGE_KEY, JSON.stringify(playerNames));
+    } catch {
+      // storage may be unavailable; ignore
+    }
+  }, [playerNames]);
 
   const handleNameChange = useCallback((index, value) => {
     setPlayerNames(prev => {

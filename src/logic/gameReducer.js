@@ -4,7 +4,7 @@ import {
   resetDiceSeed,
 } from './gameUtils.js';
 import {
-  GAME_PHASES, GAME_STATUS, MAX_CONSECUTIVE_SIXES, STORAGE_KEY,
+  GAME_PHASES, GAME_STATUS, MAX_CONSECUTIVE_SIXES, PIECES_PER_PLAYER, STORAGE_KEY,
 } from '../data/constants.js';
 
 const createInitialState = () => ({
@@ -115,10 +115,12 @@ export function gameReducer(state, action) {
           };
         }
 
+        const cutPiece = !!(newState.lastMove && newState.lastMove.killed);
+
         return {
           ...newState,
           diceRolling: false,
-          gamePhase: isSix ? GAME_PHASES.ROLLING : GAME_PHASES.TURN_COMPLETE,
+          gamePhase: (isSix || cutPiece) ? GAME_PHASES.ROLLING : GAME_PHASES.TURN_COMPLETE,
           availableMoves: [],
           selectedPiece: null,
         };
@@ -144,6 +146,7 @@ export function gameReducer(state, action) {
 
       const { newState } = executeMove(state, state.currentTurn, pieceId, move);
       const isSix = state.diceValue === 6;
+      const cutPiece = !!(newState.lastMove && newState.lastMove.killed);
 
       const winners = checkWinner(newState);
       for (const w of winners) {
@@ -170,7 +173,7 @@ export function gameReducer(state, action) {
         ...newState,
         diceRolling: false,
         consecutiveSixes: isSix ? (state.consecutiveSixes) : 0,
-        gamePhase: isSix ? GAME_PHASES.ROLLING : GAME_PHASES.TURN_COMPLETE,
+        gamePhase: (isSix || cutPiece) ? GAME_PHASES.ROLLING : GAME_PHASES.TURN_COMPLETE,
         availableMoves: [],
         selectedPiece: null,
       };
@@ -244,16 +247,49 @@ export function gameReducer(state, action) {
     case 'UNDO_MOVE': {
       if (state.gameStatus === GAME_STATUS.FINISHED) return state;
       if (state.moveHistory.length === 0) return state;
-      const newHistory = [...state.moveHistory];
-      newHistory.shift();
+
+      const lastMove = state.moveHistory[0];
+      const newState = JSON.parse(JSON.stringify(state));
+      const mover = newState.players[lastMove.player];
+      const moverPiece = mover?.pieces.find(p => p.id === lastMove.piece);
+      if (!mover || !moverPiece) return state;
+
+      moverPiece.position = lastMove.from;
+      moverPiece.isFinished = false;
+      moverPiece.isHome = lastMove.from === -1;
+      moverPiece.isActive = lastMove.from !== -1;
+      mover.finishedPieces = mover.pieces.filter(p => p.isFinished).length;
+      if (mover.finishedPieces < PIECES_PER_PLAYER) mover.isWinner = false;
+
+      const killedPieces = lastMove.killedPieces || [];
+      for (const victim of killedPieces) {
+        const victimPlayer = newState.players[victim.playerId];
+        if (!victimPlayer) continue;
+        const vp = victimPlayer.pieces.find(p => p.id === victim.pieceId);
+        if (!vp) continue;
+        vp.position = victim.fromPosition;
+        vp.isFinished = false;
+        vp.isHome = victim.fromPosition === -1;
+        vp.isActive = victim.fromPosition !== -1;
+        victimPlayer.finishedPieces = victimPlayer.pieces.filter(p => p.isFinished).length;
+        if (victimPlayer.finishedPieces < PIECES_PER_PLAYER) victimPlayer.isWinner = false;
+      }
+
+      const newHistory = state.moveHistory.slice(1);
       return {
-        ...state,
+        ...newState,
+        winner: null,
         moveHistory: newHistory,
         lastMove: newHistory[0] || null,
+        gameStatus: GAME_STATUS.IN_PROGRESS,
         gamePhase: GAME_PHASES.ROLLING,
         diceValue: 0,
+        consecutiveSixes: 0,
         availableMoves: [],
         selectedPiece: null,
+        rankings: [],
+        currentTurn: lastMove.player,
+        turnTimer: Date.now(),
       };
     }
 
@@ -285,7 +321,7 @@ export function gameReducer(state, action) {
       if (!action.payload) return state;
       return {
         ...JSON.parse(JSON.stringify(action.payload)),
-        diceRolling: false,
+        diceRolling: !!action.payload.diceRolling,
       };
     }
 

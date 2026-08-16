@@ -5,7 +5,7 @@ import {
   isGameOver, getRankings, rollDice,
   resetDiceSeed,
 } from '../logic/gameUtils.js';
-import { GAME_PHASES, GAME_STATUS, MAX_CONSECUTIVE_SIXES, TURN_TIMER_SECONDS } from '../data/constants.js';
+import { GAME_PHASES, GAME_STATUS, MAX_CONSECUTIVE_SIXES, TURN_TIMER_SECONDS, TURN_COMPLETE_AUTO_ADVANCE_MS, DICE_ROLL_RESOLVE_MS } from '../data/constants.js';
 
 export class SyncManager {
   constructor(connectionManager) {
@@ -16,6 +16,8 @@ export class SyncManager {
     this._requestSequence = 0;
     this._lastProcessedSequence = 0;
     this._afkTimer = null;
+    this._pendingRoll = null;
+    this._rollResolveTimer = null;
   }
 
   setState(state) {
@@ -30,6 +32,11 @@ export class SyncManager {
   // manager so a leftover AFK timer can't broadcast a stale game into a fresh lobby.
   destroy() {
     this._clearAfkTimer();
+    if (this._rollResolveTimer) {
+      clearTimeout(this._rollResolveTimer);
+      this._rollResolveTimer = null;
+    }
+    this._pendingRoll = null;
     this.authoritativeState = null;
     this.onStateUpdate = null;
     this.onError = null;
@@ -39,11 +46,14 @@ export class SyncManager {
     resetDiceSeed();
     const players = {};
     const colors = ['red', 'green', 'yellow', 'blue'];
+    const usedColors = new Set();
     playerConfigs.forEach((config, index) => {
-      const color = colors[index];
+      const color = config.color || colors.find(c => !usedColors.has(c)) || colors[index];
+      usedColors.add(color);
       players[color] = {
         color,
         name: config.name,
+        profilePic: config.profilePic || null,
         pieces: Array.from({ length: 4 }, (_, i) => ({
           id: i,
           position: -1,
@@ -121,6 +131,12 @@ export class SyncManager {
     // matches exactly when the turn will be auto-skipped.
     this.authoritativeState = { ...state, turnTimer: Date.now() };
 
+    // TURN_COMPLETE auto-advances quickly (no End Turn button anymore) once
+    // the piece animation has had time to play out.
+    const delay = state.gamePhase === GAME_PHASES.TURN_COMPLETE
+      ? TURN_COMPLETE_AUTO_ADVANCE_MS
+      : TURN_TIMER_SECONDS * 1000;
+
     this._afkTimer = setTimeout(() => {
       if (!this.authoritativeState) return;
       const s = this.authoritativeState;
@@ -129,7 +145,21 @@ export class SyncManager {
         this._advanceToNextTurn();
         this.broadcastState({ reason: 'afk_timeout' });
       }
-    }, TURN_TIMER_SECONDS * 1000);
+    }, delay);
+  }
+
+  // Start a fresh game with the same (still-connected) players after a win.
+  // Sequence numbers keep rising so stale rematch states can never overwrite
+  // a newer game. Refuses to restart with fewer than two players so a lone
+  // host can never spin up a single-player room by accident.
+  restartGame() {
+    const prev = this.authoritativeState;
+    if (!prev || !prev.players) return null;
+    const configs = Object.values(prev.players)
+      .filter(p => !p.isDisconnected)
+      .map(p => ({ name: p.name, color: p.color, profilePic: p.profilePic || null }));
+    if (configs.length < 2) return null;
+    return this.startGame(configs);
   }
 
   broadcastState(extraFields) {
@@ -144,7 +174,12 @@ export class SyncManager {
       ...extraFields,
     });
     if (this.onStateUpdate) {
-      this.onStateUpdate({ ...this.getState(), sequence });
+      // Pass along a stable `reason` so the host (via onStateUpdate) reacts to
+      // the exact same events the clients (via GAME_STATE_SYNC) do.
+      let reason = extraFields.reason || null;
+      if (!reason && extraFields.autoExecuted) reason = 'auto_executed';
+      if (!reason && extraFields.executedMove) reason = 'move_executed';
+      this.onStateUpdate({ ...this.getState(), sequence, reason });
     }
   }
 
@@ -240,9 +275,19 @@ export class SyncManager {
     }
 
     if (activePlayerIds.length === 1) {
+      // The last remaining player wins by default: move all their pieces to the
+      // final position so the game ends cleanly with a full finished board.
       const winnerId = activePlayerIds[0];
-      if (state.players[winnerId]) {
-        state.players[winnerId].isWinner = true;
+      const winner = state.players[winnerId];
+      if (winner) {
+        for (const piece of winner.pieces) {
+          piece.isFinished = true;
+          piece.isHome = false;
+          piece.isActive = false;
+          piece.position = -1;
+        }
+        winner.finishedPieces = winner.pieces.length;
+        winner.isWinner = true;
       }
       this.authoritativeState = {
         ...state,
@@ -266,6 +311,10 @@ export class SyncManager {
   _handleRollRequest(data, peerId) {
     const playerId = data.playerId;
     if (!this._isValidRequest(playerId, GAME_PHASES.ROLLING, 'roll', peerId)) return;
+    if (this._pendingRoll) {
+      this._sendRejection(peerId, ERROR_CODES.INVALID_MOVE, 'Roll already in progress');
+      return;
+    }
 
     const state = this.authoritativeState;
     this._clearAfkTimer();
@@ -280,7 +329,9 @@ export class SyncManager {
       return;
     }
 
-    const diceValue = (data.diceValue >= 1 && data.diceValue <= 6) ? data.diceValue : rollDice();
+    // Host is authoritative: it always rolls its own dice. The value sent by
+    // the client (if any) is ignored so a client can't rig the roll.
+    const diceValue = rollDice();
     const isSix = diceValue === 6;
     const newSixCount = isSix ? state.consecutiveSixes + 1 : 0;
 
@@ -311,10 +362,43 @@ export class SyncManager {
       return;
     }
 
+    // The die is still visibly rolling on every client: reveal the rolled
+    // value first, then resolve the move after the dice animation has played
+    // out so the piece never moves while the dice is rolling.
+    this.authoritativeState = {
+      ...state,
+      diceValue,
+      consecutiveSixes: newSixCount,
+      diceRolling: true,
+      gamePhase: GAME_PHASES.ROLLING,
+    };
+    this.broadcastState({ reason: 'dice_rolled' });
+
+    this._pendingRoll = { playerId, diceValue, isSix, newSixCount, moves };
+    this._rollResolveTimer = setTimeout(() => {
+      this._rollResolveTimer = null;
+      this._resolveRoll(this._pendingRoll);
+      this._pendingRoll = null;
+    }, DICE_ROLL_RESOLVE_MS);
+  }
+
+  _resolveRoll(pending) {
+    if (!pending) return;
+    const { playerId, diceValue, isSix, newSixCount, moves } = pending;
+    const state = this.authoritativeState;
+    if (!state) return;
+    // A disconnect or turn advance may have moved on while the dice was
+    // rolling — never apply a stale roll.
+    if (state.currentTurn !== playerId
+      || state.gamePhase !== GAME_PHASES.ROLLING
+      || state.diceValue !== diceValue) {
+      return;
+    }
+
     if (moves.length === 1) {
       const move = moves[0];
       const { newState } = executeMove(
-        { ...state, diceValue }, playerId, move.pieceId, move
+        { ...state, diceRolling: false }, playerId, move.pieceId, move
       );
 
       const winners = checkWinner(newState);
@@ -324,14 +408,16 @@ export class SyncManager {
       }
 
       const gameOver = winners.length > 0 && isGameOver(newState);
+      const cutPiece = !!(newState.lastMove && newState.lastMove.killed);
       const nextPhase = gameOver ? GAME_PHASES.GAME_OVER
-        : isSix ? GAME_PHASES.ROLLING
+        : (isSix || cutPiece) ? GAME_PHASES.ROLLING
         : GAME_PHASES.TURN_COMPLETE;
 
       this.authoritativeState = {
         ...newState,
         diceValue,
         consecutiveSixes: isSix ? newSixCount : 0,
+        diceRolling: false,
         gamePhase: nextPhase,
         gameStatus: gameOver ? GAME_STATUS.FINISHED : GAME_STATUS.IN_PROGRESS,
         rankings: gameOver ? getRankings(newState) : [],
@@ -354,8 +440,7 @@ export class SyncManager {
 
     this.authoritativeState = {
       ...state,
-      diceValue,
-      consecutiveSixes: newSixCount,
+      diceRolling: false,
       gamePhase: GAME_PHASES.SELECTING_PIECE,
       availableMoves: moves.map(m => ({
         pieceId: m.pieceId,
@@ -391,6 +476,7 @@ export class SyncManager {
 
     const { newState } = executeMove(state, playerId, pieceId, move);
     const isSix = diceValue === 6;
+    const cutPiece = !!(newState.lastMove && newState.lastMove.killed);
     const winners = checkWinner(newState);
 
     for (const w of winners) {
@@ -400,7 +486,7 @@ export class SyncManager {
 
     const gameOver = winners.length > 0 && isGameOver(newState);
     const nextPhase = gameOver ? GAME_PHASES.GAME_OVER
-      : isSix ? GAME_PHASES.ROLLING
+      : (isSix || cutPiece) ? GAME_PHASES.ROLLING
       : GAME_PHASES.TURN_COMPLETE;
 
     this.authoritativeState = {

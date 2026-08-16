@@ -30,8 +30,11 @@ export function addPlayerToLobby(lobby, player) {
   const existing = lobby.players.find(p => p.id === player.id);
   if (existing) return lobby;
   if (lobby.players.length >= lobby.maxPlayers) return lobby;
+  // Assign the first color not already held, so a player who leaves and
+  // rejoins doesn't end up with a duplicate color or shift everyone else's.
   const colors = ['red', 'green', 'yellow', 'blue'];
-  const color = colors[lobby.players.length] || null;
+  const usedColors = new Set(lobby.players.map(p => p.color).filter(Boolean));
+  const color = colors.find(c => !usedColors.has(c)) || null;
   return {
     ...lobby,
     players: [...lobby.players, { ...player, color }],

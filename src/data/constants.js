@@ -56,7 +56,16 @@ export const PATH_SECTIONS = {
 };
 
 export const TURN_TIMER_SECONDS = 30;
+// After a move completes (no End Turn button anymore), the turn auto-advances
+// once the piece animation has had time to play out.
+export const TURN_COMPLETE_AUTO_ADVANCE_MS = 700;
+// Time between the dice being rolled and the piece actually moving. The die
+// shakes (500ms) then settles (~950ms); the piece moves as soon as the die
+// has finished rolling and shown its value.
+export const DICE_ROLL_RESOLVE_MS = 950;
 export const STORAGE_KEY = 'ludo_game_state';
+export const PLAYER_NAME_STORAGE_KEY = 'ludo_player_name';
+export const PLAYER_NAMES_STORAGE_KEY = 'ludo_setup_player_names';
 export const MAX_CONSECUTIVE_SIXES = 3;
 
 export const GAME_PHASES = {

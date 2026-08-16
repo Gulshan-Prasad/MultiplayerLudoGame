@@ -1,5 +1,5 @@
 import { PER_PLAYER_PATHS, SAFE_SPOT_COORDS } from '../data/boardData.js';
-import { PIECES_PER_PLAYER } from '../data/constants.js';
+import { PIECES_PER_PLAYER, HOME_BASE_POSITIONS } from '../data/constants.js';
 
 export const MAIN_PATH_LENGTH = 51;
 export const FINISH_POS = 56;
@@ -228,10 +228,10 @@ export function executeMove(state, playerId, pieceId, move) {
         if (vp.position >= 0 && vp.position < MAIN_PATH_LENGTH) {
           const vpCoord = getCoord(victimPlayer.color, vp.position);
           if (vpCoord && coordKey(vpCoord) === destKey) {
+            killed.push({ playerId: victimPid, pieceId: vp.id, fromPosition: vp.position });
             vp.position = -1;
             vp.isHome = true;
             vp.isActive = false;
-            killed.push({ playerId: victimPid, pieceId: vp.id });
           }
         }
       }
@@ -244,6 +244,7 @@ export function executeMove(state, playerId, pieceId, move) {
     from: fromPos,
     to: move.toPosition,
     killed: killed.length > 0,
+    killedPieces: killed,
     finish: move.finishes,
   };
 
@@ -321,11 +322,14 @@ export function isGameOver(state) {
 export function createInitialPlayers(playerConfigs) {
   const players = {};
   const colors = ['red', 'green', 'yellow', 'blue'];
+  const usedColors = new Set();
   playerConfigs.forEach((config, index) => {
-    const color = colors[index];
+    const color = config.color || colors.find(c => !usedColors.has(c)) || colors[index];
+    usedColors.add(color);
     players[color] = {
       color,
       name: config.name || color.charAt(0).toUpperCase() + color.slice(1),
+      profilePic: config.profilePic || null,
       pieces: Array.from({ length: 4 }, (_, i) => ({
         id: i,
         position: -1,
@@ -343,19 +347,12 @@ export function createInitialPlayers(playerConfigs) {
   return players;
 }
 
-let lastDiceValue = 0;
-
 export function rollDice() {
-  let value;
-  do {
-    value = Math.floor(Math.random() * 6) + 1;
-  } while (value === lastDiceValue);
-  lastDiceValue = value;
-  return value;
+  return Math.floor(Math.random() * 6) + 1;
 }
 
 export function resetDiceSeed() {
-  lastDiceValue = 0;
+  // Kept for API compatibility; dice rolls are fully random now.
 }
 
 export function computeAnimationFrames(fromPos, toPos, playerColor) {
@@ -367,5 +364,20 @@ export function computeAnimationFrames(fromPos, toPos, playerColor) {
     const coord = getPieceCoordinates(playerColor, pos);
     if (coord) frames.push(coord);
   }
+  return frames;
+}
+
+// Frames for a piece being cut: it walks BACKWARDS along its own path from
+// `fromPos` to position 0, then lands in its home base, instead of teleporting.
+export function computeReturnAnimationFrames(playerColor, pieceId, fromPos) {
+  const frames = [];
+  if (fromPos >= 0 && fromPos < MAIN_PATH_LENGTH) {
+    for (let pos = fromPos; pos >= 0; pos--) {
+      const coord = getPieceCoordinates(playerColor, pos);
+      if (coord) frames.push(coord);
+    }
+  }
+  const home = HOME_BASE_POSITIONS[playerColor]?.[pieceId];
+  if (home) frames.push(home);
   return frames;
 }

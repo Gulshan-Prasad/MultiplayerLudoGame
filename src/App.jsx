@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useGame } from './context/GameContext';
 import { NetworkProvider } from './network/NetworkProvider';
@@ -15,7 +15,29 @@ import ChatBox from './components/ChatBox';
 import TurnActionButton from './components/TurnActionButton';
 import CoolNameInput from './components/CoolNameInput';
 import WinnerModal from './components/WinnerModal';
-import { GAME_STATUS, GAME_PHASES, COLOR_MAP, STORAGE_KEY } from './data/constants';
+import GameSoundEffects from './components/GameSoundEffects';
+import { subscribeSound, getSoundMuted, toggleMute, playSound } from './utils/sound';
+import { GAME_STATUS, GAME_PHASES, COLOR_MAP, STORAGE_KEY, PLAYER_NAME_STORAGE_KEY } from './data/constants';
+
+function SoundToggle() {
+  const muted = useSyncExternalStore(subscribeSound, getSoundMuted, () => false);
+  return (
+    <button
+      onClick={toggleMute}
+      aria-label={muted ? 'Unmute sounds' : 'Mute sounds'}
+      title={muted ? 'Unmute sounds' : 'Mute sounds'}
+      className="btn-3d btn-3d-gold btn-sm w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 rounded-lg p-0"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+        {muted ? (
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 9l4 4m0-4l-4 4M11 5L6 9H3v6h3l5 4V5z" />
+        ) : (
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H3v6h3l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a9 9 0 010 12.73" />
+        )}
+      </svg>
+    </button>
+  );
+}
 
 const dotPositions = {
   1: [[50, 50]],
@@ -33,7 +55,7 @@ function DiceDot({ cx, cy }) {
 function LeaveButton({ onClick, label = 'Leave', ariaLabel = 'Leave game' }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => { onClick?.(e); playSound('navigate'); }}
       aria-label={ariaLabel}
       title={label}
       className="btn-3d btn-3d-red btn-sm w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 rounded-lg p-0"
@@ -50,6 +72,9 @@ function GameScreenShell({ leaveButton, playerPanels, board, belowBoard, info, d
     <div className="h-dvh w-full overflow-hidden flex flex-col page-bg">
       <header className="flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-3 py-1.5 sm:py-2 flex-shrink-0 min-w-0">
         {leaveButton}
+        <div className="ml-auto">
+          <SoundToggle />
+        </div>
       </header>
 
       <main className={`flex-1 min-h-0 flex gap-1.5 sm:gap-3 px-1.5 sm:px-3 py-1.5 sm:py-3 min-w-0 ${desktopChatOffset ? 'lg:pr-[268px]' : ''}`}>
@@ -97,13 +122,20 @@ function MultiplayerGameContent() {
   const game = useNetworkGame();
   const network = useNetwork();
   const navigate = useNavigate();
-  const { state, endTurn, rollDice, selectPiece } = game;
+  const { state, rollDice, selectPiece } = game;
+  const { requestFullState } = network;
   const { players, currentTurn, gamePhase, diceValue, diceRolling, consecutiveSixes } = state;
   const [shaking, setShaking] = useState(false);
   const [landing, setLanding] = useState(false);
   const [displayValue, setDisplayValue] = useState(0);
 
-  const rolling = shaking || diceRolling;
+  const rolling = shaking;
+
+  // Re-sync the authoritative board from the host on entering an online game
+  // (covers reconnect/refresh where the last broadcast may have been missed).
+  useEffect(() => {
+    requestFullState();
+  }, [requestFullState]);
 
   // While rolling, cycle through random faces so the die looks alive.
   useEffect(() => {
@@ -138,6 +170,35 @@ function MultiplayerGameContent() {
   const isMyTurn = network.myPlayerId === currentTurn;
   const isActivePlayer = network.isMultiplayer ? isMyTurn : true;
 
+  // Profile pictures live in the lobby (not the game-state broadcast, which
+  // must stay small). Look them up by color for the player panels.
+  const profilePics = useMemo(() => {
+    const map = {};
+    for (const p of network.lobby?.players || []) {
+      if (p.color && p.profilePic) map[p.color] = p.profilePic;
+    }
+    return map;
+  }, [network.lobby]);
+
+  // Map a chat sender's peer id to their player color so each player panel can
+  // show the latest message the owner sent, as a popup below the box.
+  const colorByPeerId = useMemo(() => {
+    const map = {};
+    for (const p of network.lobby?.players || []) {
+      if (p.id && p.color) map[p.id] = p.color;
+    }
+    return map;
+  }, [network.lobby]);
+
+  const latestChatByColor = useMemo(() => {
+    const map = {};
+    for (const msg of network.chatMessages || []) {
+      const color = colorByPeerId[msg.senderId];
+      if (color) map[color] = msg;
+    }
+    return map;
+  }, [network.chatMessages, colorByPeerId]);
+
   const showPenalty = consecutiveSixes >= 3 && gamePhase === GAME_PHASES.TURN_COMPLETE;
 
   const leaveButton = (
@@ -160,6 +221,8 @@ function MultiplayerGameContent() {
           player={player}
           isCurrentTurn={pid === currentTurn}
           isMe={pid === network.myPlayerId}
+          profilePic={profilePics[pid]}
+          chatMessage={latestChatByColor[pid]}
         />
       ))}
     </div>
@@ -171,9 +234,6 @@ function MultiplayerGameContent() {
         {currentPlayer?.name}'s Turn
       </div>
       <div className="flex flex-wrap items-center justify-center gap-1 mt-0.5 sm:mt-1">
-        {isActivePlayer && (
-          <span className="badge-classic bg-[#EFE2C0] text-[#5b3a1e] border-[#a89363]">{network.isHost ? 'Host' : 'Client'}</span>
-        )}
         <span className={`badge-classic ${
           network.connectionStatus === 'connected'
             ? 'bg-[#e7f4e5] text-[#1b6b2e] border-[#2f9e44]'
@@ -210,10 +270,10 @@ function MultiplayerGameContent() {
           relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl select-none
           transition-all duration-300 dice-3d
           ${gamePhase === GAME_PHASES.ROLLING && !diceRolling && isActivePlayer
-            ? 'cursor-pointer hover:scale-110 hover:shadow-xl active:scale-95 animate-dice-wiggle'
+            ? 'cursor-pointer hover:scale-110 hover:shadow-xl active:scale-95 animate-dice-wiggle dice-3d-glow'
             : 'dice-3d-idle opacity-70'}
-          ${shaking || diceRolling ? 'animate-dice-roll' : ''}
-          ${!shaking && !diceRolling && landing ? 'animate-dice-land' : ''}
+          ${shaking ? 'animate-dice-roll' : ''}
+          ${!shaking && landing ? 'animate-dice-land' : ''}
         `}
         onClick={isActivePlayer && gamePhase === GAME_PHASES.ROLLING && !diceRolling ? handleRoll : undefined}
         role="button"
@@ -234,7 +294,6 @@ function MultiplayerGameContent() {
 
       <TurnActionButton
         onRoll={handleRoll}
-        onEndTurn={endTurn}
         showCooldown
         isActive={isActivePlayer}
         waitingName={currentPlayer?.name}
@@ -331,13 +390,13 @@ function LocalGameContent() {
   const actions = (
     <div className="flex flex-wrap gap-1.5 sm:gap-2">
       <button
-        onClick={newGame}
+        onClick={() => { playSound('new_game'); newGame(); }}
         className="btn-3d btn-3d-red btn-sm flex-1 min-w-[64px]"
       >
         New
       </button>
       <button
-        onClick={saveGame}
+        onClick={() => { playSound('save'); saveGame(); }}
         className="btn-3d btn-3d-green btn-sm flex-1 min-w-[64px]"
         disabled={gameStatus !== GAME_STATUS.IN_PROGRESS}
       >
@@ -345,14 +404,14 @@ function LocalGameContent() {
       </button>
       {hasSavedGame && (
         <button
-          onClick={loadGame}
+          onClick={() => { playSound('load'); loadGame(); }}
           className="btn-3d btn-3d-purple btn-sm flex-1 min-w-[64px]"
         >
           Load
         </button>
       )}
       <button
-        onClick={undoMove}
+        onClick={() => { playSound('undo'); undoMove(); }}
         className="btn-3d btn-3d-gray btn-sm flex-1 min-w-[64px]"
         disabled={moveHistory.length === 0 || gamePhase === GAME_PHASES.GAME_OVER}
       >
@@ -422,11 +481,44 @@ function OnlineRoomView() {
   const { roomCode: routeCode } = useParams();
   const network = useNetwork();
   const navigate = useNavigate();
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(() => {
+    try {
+      return localStorage.getItem(PLAYER_NAME_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
   const [profilePic, setProfilePic] = useState(null);
   const [error, setError] = useState('');
 
+  // Remember the name locally so the user doesn't have to retype it.
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAYER_NAME_STORAGE_KEY, playerName);
+    } catch {
+      // storage may be unavailable; ignore
+    }
+  }, [playerName]);
+
   const code = (routeCode || '').toUpperCase().replace(/\s/g, '');
+
+  if (network.kicked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 page-bg relative overflow-hidden">
+        <div className="panel-classic p-6 max-w-md w-full relative z-10 text-center">
+          <div className="text-5xl mb-3">🚫</div>
+          <h2 className="game-title text-2xl font-bold mb-2">You were kicked</h2>
+          <p className="text-[#7a5c36] text-sm mb-6">The host removed you from this room.</p>
+          <button
+            onClick={() => { network.clearKicked(); navigate('/online'); }}
+            className="btn-3d btn-3d-blue btn-md w-full"
+          >
+            Back to Online Menu
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Already connected to this exact room -> show the lobby.
   if (network.roomCode === code && network.lobby) {
@@ -589,6 +681,7 @@ function RoutesWithGameStateHandler() {
       <ChatBox />
       <DisconnectBanner />
       <WinnerModal />
+      <GameSoundEffects />
     </NetworkProvider>
   );
 }

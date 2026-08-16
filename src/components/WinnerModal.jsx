@@ -1,8 +1,9 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { useNetwork } from '../network/useNetwork';
 import { COLOR_MAP } from '../data/constants';
+import { playSound } from '../utils/sound';
 
 const PIECE_IMAGES = {
   red: '/textures/pieces/RedPlayer.png',
@@ -17,6 +18,13 @@ function WinnerModal() {
   const navigate = useNavigate();
   const location = useLocation();
   const { gamePhase, rankings, players } = state;
+  const [waitingRematch, setWaitingRematch] = useState(false);
+
+  useEffect(() => {
+    if (gamePhase === 'GAME_OVER' && rankings && rankings.length > 0) {
+      playSound('win');
+    }
+  }, [gamePhase, rankings]);
 
   // Only show on an actual game screen. A game-over state left in memory (e.g.
   // after leaving a game via browser back) must not overlay other screens.
@@ -30,14 +38,20 @@ function WinnerModal() {
       resetState();
       network.leaveRoom();
     }
+    playSound('navigate');
     navigate('/');
   };
 
   const handlePlayAgain = () => {
     if (network.isMultiplayer) {
-      resetState();
-      network.leaveRoom();
-      navigate('/online');
+      // Stay in the room: the host restarts the game, everyone rehydrates.
+      if (network.isHost) {
+        network.rematch();
+      } else {
+        network.requestRematch();
+        playSound('rematch');
+        setWaitingRematch(true);
+      }
       return;
     }
     newGame();
@@ -101,7 +115,9 @@ function WinnerModal() {
               onClick={handlePlayAgain}
               className="btn-3d btn-3d-blue btn-md flex-1"
             >
-              {network.isMultiplayer ? 'New Match' : 'Play Again'}
+              {network.isMultiplayer
+                ? (network.isHost ? 'Rematch' : (waitingRematch ? 'Waiting for host…' : 'Request Rematch'))
+                : 'Play Again'}
             </button>
             <button
               onClick={handleMainMenu}

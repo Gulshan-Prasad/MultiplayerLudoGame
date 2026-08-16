@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useNetwork } from '../network/useNetwork';
+import { playSound } from '../utils/sound';
 
 function ChatBox() {
   const network = useNetwork();
@@ -38,6 +39,7 @@ function ChatBox() {
   const handleSend = () => {
     if (!text.trim()) return;
     sendChatMessage(text);
+    playSound('chat_send');
     setText('');
   };
 
@@ -45,6 +47,7 @@ function ChatBox() {
     setOpen(true);
     setUnread(0);
     lastSeenRef.current = chatMessages.length;
+    playSound('chat_open');
   };
 
   return (
@@ -74,7 +77,7 @@ function ChatBox() {
           <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--wood-dark)' }}>
             <span className="game-title-gold font-bold text-sm tracking-wide">💬 Chat</span>
             <button
-              onClick={() => setOpen(false)}
+              onClick={() => { setOpen(false); playSound('chat_close'); }}
               className="btn-3d btn-3d-red btn-sm"
               aria-label="Close chat"
             >

@@ -1,7 +1,7 @@
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNetwork } from '../network/useNetwork';
-import { PLAYER_COLORS } from '../data/constants';
+import { playSound } from '../utils/sound';
 
 const PIECE_IMAGES = {
   red: '/textures/pieces/RedPlayer.png',
@@ -10,9 +10,9 @@ const PIECE_IMAGES = {
   blue: '/textures/pieces/BluePlayer.png',
 };
 
-function PlayerSlot({ player, playerIndex, isHost, currentPeerId, onToggleReady }) {
+function PlayerSlot({ player, isHost, currentPeerId, onToggleReady, onKick }) {
   const isMe = player.id === currentPeerId;
-  const displayColor = PLAYER_COLORS[playerIndex] || player.color;
+  const displayColor = player.color;
   return (
     <div className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
       isMe ? 'border-[#d4a017] bg-[#fdf1dc] shadow-[3px_3px_0_#9c7a0e]' : 'border-[#a89363] bg-[#efe2c0]'
@@ -38,6 +38,16 @@ function PlayerSlot({ player, playerIndex, isHost, currentPeerId, onToggleReady 
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {isHost && !isMe && (
+          <button
+            onClick={() => onKick?.(player.id)}
+            className="btn-3d btn-3d-red btn-sm"
+            aria-label={`Kick ${player.name}`}
+            title={`Kick ${player.name}`}
+          >
+            ✕
+          </button>
+        )}
         {!isHost && isMe && (
           <button
             onClick={() => onToggleReady?.()}
@@ -75,7 +85,7 @@ function MultiplayerLobby() {
   const navigate = useNavigate();
   const {
     roomCode, lobby, isHost, leaveRoom, toggleReady, startGame,
-    peerIds, networkError,
+    peerIds, networkError, kickPlayer,
   } = useNetwork();
 
   const allReady = useMemo(() => {
@@ -87,8 +97,32 @@ function MultiplayerLobby() {
   const copyRoomCode = useCallback(() => {
     if (displayCode) {
       navigator.clipboard.writeText(displayCode).catch(() => {});
+      playSound('copy_code');
     }
   }, [displayCode]);
+
+  // Play a sound whenever the room roster or readiness changes: a player
+  // joined, left, or toggled their ready state.
+  const prevLobbyRef = useRef(null);
+  useEffect(() => {
+    const prev = prevLobbyRef.current;
+    prevLobbyRef.current = lobby;
+    if (!lobby || !prev) return;
+
+    const prevById = new Map(prev.players.map(p => [p.id, p]));
+    for (const p of lobby.players) {
+      const was = prevById.get(p.id);
+      if (!was) {
+        playSound('player_join');
+      } else if (was.isReady !== p.isReady) {
+        playSound(p.isReady ? 'ready' : 'unready');
+      }
+    }
+    const curIds = new Set(lobby.players.map(p => p.id));
+    for (const p of prev.players) {
+      if (!curIds.has(p.id)) playSound('player_leave');
+    }
+  }, [lobby]);
 
   const handleLeave = useCallback(() => {
     leaveRoom();
@@ -97,9 +131,10 @@ function MultiplayerLobby() {
 
   const handleStartGame = useCallback(() => {
     if (!isHost || !lobby || !allReady) return;
-    const configs = lobby.players.map((p, i) => ({
+    const configs = lobby.players.map(p => ({
       name: p.name,
-      color: PLAYER_COLORS[i],
+      color: p.color,
+      profilePic: p.profilePic || null,
     }));
     startGame(configs);
     navigate('/online/game');
@@ -145,15 +180,14 @@ function MultiplayerLobby() {
 
         <div className="space-y-2 mb-6">
           <h3 className="text-sm font-semibold text-[#5b3a1e] mb-2">Players</h3>
-          {lobby.players.map((player, idx) => (
+          {lobby.players.map((player) => (
             <PlayerSlot
               key={player.id}
               player={player}
-              playerIndex={idx}
-              isHost={player.isHost}
+              isHost={isHost}
               currentPeerId={peerIds[0]}
-              isMe={player.id === peerIds[0]}
               onToggleReady={toggleReady}
+              onKick={kickPlayer}
             />
           ))}
           {Array.from({ length: lobby.maxPlayers - lobby.players.length }).map((_, i) => (

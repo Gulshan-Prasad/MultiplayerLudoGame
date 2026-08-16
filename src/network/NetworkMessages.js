@@ -15,6 +15,10 @@ export const MESSAGE_TYPES = {
   ROLL_REQUEST: 'roll_request',
   MOVE_REQUEST: 'move_request',
   END_TURN_REQUEST: 'end_turn_request',
+  REMATCH_REQUEST: 'rematch_request',
+
+  // Room moderation (host → all)
+  KICK_PLAYER: 'kick_player',
 
   // Game results (host → all)
   ROLL_RESULT: 'roll_result',

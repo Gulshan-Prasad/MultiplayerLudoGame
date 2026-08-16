@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { GAME_PHASES } from '../data/constants';
 import TurnActionButton from './TurnActionButton';
+import { playSound } from '../utils/sound';
 
 const dotPositions = {
   1: [[50, 50]],
@@ -17,14 +18,18 @@ function DiceDot({ cx, cy }) {
 }
 
 function Dice() {
-  const { state, rollDice, endTurn } = useGame();
+  const { state, rollDice } = useGame();
   const { diceValue, diceRolling, gamePhase, consecutiveSixes } = state;
   const [shaking, setShaking] = useState(false);
   const [landing, setLanding] = useState(false);
   const [displayValue, setDisplayValue] = useState(0);
 
   const canRoll = gamePhase === GAME_PHASES.ROLLING && !diceRolling;
-  const rolling = shaking || diceRolling;
+  // The visual roll is the shake animation only; diceRolling stays true until
+  // the move resolves, so the die reveals its value while the piece is still
+  // waiting to move.
+  const rolling = shaking;
+  const showPenalty = consecutiveSixes >= 3 && gamePhase === GAME_PHASES.TURN_COMPLETE;
 
   // While rolling, cycle through random faces so the die looks alive.
   useEffect(() => {
@@ -46,6 +51,7 @@ function Dice() {
     if (!canRoll) return;
     setLanding(false);
     setShaking(true);
+    playSound('dice_roll');
     rollDice();
     setTimeout(() => {
       setShaking(false);
@@ -53,8 +59,6 @@ function Dice() {
     }, 500);
     setTimeout(() => setLanding(false), 950);
   };
-
-  const showPenalty = consecutiveSixes >= 3 && gamePhase === GAME_PHASES.TURN_COMPLETE;
 
   const diceAnimation = canRoll
     ? 'animate-dice-wiggle'
@@ -104,7 +108,7 @@ function Dice() {
         )}
       </div>
 
-      <TurnActionButton onRoll={handleRoll} onEndTurn={endTurn} />
+      <TurnActionButton onRoll={handleRoll} />
     </div>
   );
 }

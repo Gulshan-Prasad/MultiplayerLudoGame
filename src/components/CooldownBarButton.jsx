@@ -8,6 +8,7 @@ function CooldownBarButton({
   cooldownActive = true,
   fillColor = 'var(--blue)',
   className = '',
+  taller = false,
   children,
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -29,7 +30,7 @@ function CooldownBarButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`relative overflow-hidden h-9 sm:h-10 px-3 sm:px-4 rounded-lg select-none font-bold text-xs sm:text-sm text-white ${className}`}
+      className={`relative overflow-hidden ${taller ? 'h-11 sm:h-12' : 'h-9 sm:h-10'} px-3 sm:px-4 rounded-lg select-none font-bold text-xs sm:text-sm text-white ${className}`}
       style={{
         background: 'var(--wood-dark)',
         border: '3px solid var(--wood-shadow)',

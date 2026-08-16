@@ -1,6 +1,7 @@
 import { useState, useEffect, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNetwork } from '../network/useNetwork';
+import { PLAYER_NAME_STORAGE_KEY } from '../data/constants';
 import CoolNameInput from './CoolNameInput';
 
 const PLAYER_ICON = '/textures/icon/Player.png';
@@ -45,12 +46,27 @@ function MultiplayerMenu() {
   const navigate = useNavigate();
   const { createRoom, joinRoom, networkError, lobby } = useNetwork();
   const [mode, setMode] = useState(null);
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(() => {
+    try {
+      return localStorage.getItem(PLAYER_NAME_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
   const [profilePic, setProfilePic] = useState(null);
   const [joinCode, setJoinCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Remember the name locally so the user doesn't have to retype it.
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAYER_NAME_STORAGE_KEY, playerName);
+    } catch {
+      // storage may be unavailable; ignore
+    }
+  }, [playerName]);
 
   // Stay in a locked "connecting…" state until we land in the lobby.
   // Clear it on failure so the player can retry.

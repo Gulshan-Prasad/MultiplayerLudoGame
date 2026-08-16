@@ -48,13 +48,15 @@ export function useNetworkGame() {
 
     const reqId = Date.now();
     lastRequestRef.current = reqId;
+    // Client rolls locally purely for the animation; the host rolls the real
+    // value, so a client can't rig multiplayer dice.
     const diceValue = rollDice();
 
     _sendAction(() => {
       if (!network.isHost) {
         game.dispatch({ type: 'ROLL_DICE', payload: { value: diceValue } });
       }
-      network.networkRollDice(game.state.currentTurn, diceValue);
+      network.networkRollDice(game.state.currentTurn);
     });
   }, [
     network.isMultiplayer,
