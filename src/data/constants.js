@@ -65,7 +65,9 @@ export const TURN_COMPLETE_AUTO_ADVANCE_MS = 700;
 export const DICE_ROLL_RESOLVE_MS = 950;
 export const STORAGE_KEY = 'ludo_game_state';
 export const PLAYER_NAME_STORAGE_KEY = 'ludo_player_name';
+export const PLAYER_PROFILE_PIC_STORAGE_KEY = 'ludo_player_profile_pic';
 export const PLAYER_NAMES_STORAGE_KEY = 'ludo_setup_player_names';
+export const PLAYER_PICS_STORAGE_KEY = 'ludo_setup_player_pics';
 export const MAX_CONSECUTIVE_SIXES = 3;
 
 export const GAME_PHASES = {

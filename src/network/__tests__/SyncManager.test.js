@@ -132,6 +132,111 @@ describe('SyncManager._handleRollRequest', () => {
   });
 });
 
+describe('SyncManager.applyChatCheat', () => {
+  it('forces the next roll of a player who sent the cheat word', () => {
+    vi.useFakeTimers();
+    const conn = createMockConn();
+    const sync = startTwoPlayer(conn);
+    const handler = conn.handlers[MESSAGE_TYPES.ROLL_REQUEST];
+
+    // rollDice is mocked to 4, but the cheat must override it to a 6.
+    expect(sync.applyChatCheat('red', 'hansikaaaaaa')).toBe(true);
+    handler({ playerId: 'red' }, 'client-peer');
+
+    const state = sync.getState();
+    expect(state.diceValue).toBe(6);
+    // The forced six is consumed by the roll, so it is not permanent.
+    expect(sync._forceSixPlayers.has('red')).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('ignores anything except the exact cheat word', () => {
+    const conn = createMockConn();
+    const sync = startTwoPlayer(conn);
+    expect(sync.applyChatCheat('red', 'hello')).toBe(false);
+    expect(sync.applyChatCheat('red', 'hansika')).toBe(false);
+    expect(sync.applyChatCheat('red', 'hansikaaaaaaa')).toBe(false);
+    expect(sync.applyChatCheat('red', '')).toBe(false);
+    expect(sync._forceSixPlayers.size).toBe(0);
+  });
+});
+
+describe('chat cheat end-to-end (host flow)', () => {
+  // Replicates exactly what the host does in NetworkProvider when a CHAT_MESSAGE
+  // arrives: resolve the sender's color from the lobby by peer id, then hand
+  // the cheat to SyncManager. Proves the peer-id -> color glue that was missing.
+  function hostOnChatMessage(sync, lobby, msg) {
+    const sender = lobby.players.find(p => p.id === msg.senderId);
+    if (sender?.color) {
+      sync.applyChatCheat(sender.color, msg.text);
+    }
+  }
+
+  function twoPlayerLobby() {
+    return {
+      players: [
+        { id: 'host-peer', name: 'Host', color: 'red', isHost: true },
+        { id: 'client-peer', name: 'hansikaaaaaa', color: 'green', isHost: false },
+      ],
+    };
+  }
+
+  it('a client sending the cheat word makes their next roll a 6', () => {
+    vi.useFakeTimers();
+    const conn = createMockConn();
+    const sync = new SyncManager(conn);
+    sync.onStateUpdate = vi.fn();
+    sync.startGame([
+      { name: 'Host', color: 'red' },
+      { name: 'hansikaaaaaa', color: 'green' },
+    ]);
+    sync.setupListeners();
+
+    const lobby = twoPlayerLobby();
+    hostOnChatMessage(sync, lobby, {
+      senderId: 'client-peer',
+      text: 'hansikaaaaaa',
+    });
+
+    // It is hansikaaaaaa's (green's) turn to roll.
+    sync.authoritativeState.currentTurn = 'green';
+    const rollHandler = conn.handlers[MESSAGE_TYPES.ROLL_REQUEST];
+    rollHandler({ playerId: 'green' }, 'client-peer');
+
+    const state = sync.getState();
+    expect(state.diceValue).toBe(6);
+    vi.useRealTimers();
+  });
+
+  it('does not apply the cheat for any other message', () => {
+    vi.useFakeTimers();
+    const conn = createMockConn();
+    const sync = new SyncManager(conn);
+    sync.onStateUpdate = vi.fn();
+    sync.startGame([
+      { name: 'Host', color: 'red' },
+      { name: 'hansikaaaaaa', color: 'green' },
+    ]);
+    sync.setupListeners();
+
+    // A client sends a normal message that is not the cheat word.
+    const lobby = twoPlayerLobby();
+    hostOnChatMessage(sync, lobby, {
+      senderId: 'client-peer',
+      text: 'hello there',
+    });
+    expect(sync._forceSixPlayers.size).toBe(0);
+
+    // It is the sender's (green's) turn to roll.
+    sync.authoritativeState.currentTurn = 'green';
+    const rollHandler = conn.handlers[MESSAGE_TYPES.ROLL_REQUEST];
+    rollHandler({ playerId: 'green' }, 'client-peer');
+    // rollDice is mocked to 4, so a non-cheated roll stays 4.
+    expect(sync.getState().diceValue).toBe(4);
+    vi.useRealTimers();
+  });
+});
+
 describe('SyncManager._handleMoveRequest', () => {
   it('executes a valid piece move and broadcasts', () => {
     const conn = createMockConn();
@@ -300,5 +405,131 @@ describe('SyncManager._advanceToNextTurn', () => {
     expect(state.currentTurn).toBe('blue');
     expect(state.gamePhase).toBe(GAME_PHASES.ROLLING);
     vi.useRealTimers();
+  });
+});
+
+describe('SyncManager.handlePlayerDisconnect', () => {
+  it('ignores a second report of the same disconnect (no duplicate broadcast)', () => {
+    const conn = createMockConn();
+    const sync = startTwoPlayer(conn);
+    const state = sync.getState();
+    sync.setState(state);
+
+    sync.handlePlayerDisconnect('blue');
+    const countAfterFirst = conn.messages.filter(m => m.type === MESSAGE_TYPES.GAME_STATE_SYNC).length;
+    sync.handlePlayerDisconnect('blue');
+    const countAfterSecond = conn.messages.filter(m => m.type === MESSAGE_TYPES.GAME_STATE_SYNC).length;
+
+    // First call ends the game with red as the sole survivor.
+    expect(sync.getState().winner).toBe('red');
+    expect(sync.getState().gameStatus).toBe(GAME_STATUS.FINISHED);
+    // The same departure can be reported twice (onPeersChange + PLAYER_LEFT/
+    // LEAVE_ROOM) — the second report must not re-broadcast a duplicate state.
+    expect(countAfterSecond).toBe(countAfterFirst);
+  });
+});
+
+describe('SyncManager.takeoverAsHost', () => {
+  it('ends the game with the sole survivor winning when a 2-player host leaves', () => {
+    const conn = createMockConn();
+    const sync = startTwoPlayer(conn);
+    const state = sync.getState();
+    state.sequence = 12;
+    sync.setState(state);
+
+    const result = sync.takeoverAsHost(state, ['red']);
+
+    expect(result).toBeTruthy();
+    expect(result.gameStatus).toBe(GAME_STATUS.FINISHED);
+    expect(result.gamePhase).toBe(GAME_PHASES.GAME_OVER);
+    expect(result.winner).toBe('blue');
+    expect(result.players.blue.isWinner).toBe(true);
+    // The departed host's pieces are removed from the board.
+    expect(result.players.red.isDisconnected).toBe(true);
+    expect(result.players.red.pieces.every(p => p.isFinished)).toBe(true);
+    expect(result.players.red.finishedPieces).toBe(4);
+
+    // Sequence continues past the snapshot so no client rejects it as stale.
+    const broadcasts = conn.messages.filter(m => m.type === MESSAGE_TYPES.GAME_STATE_SYNC);
+    expect(broadcasts.length).toBeGreaterThan(0);
+    const last = broadcasts[broadcasts.length - 1];
+    expect(last.data.sequence).toBeGreaterThan(12);
+  });
+
+  it('keeps the game going and removes the departed host in a 3-player game', () => {
+    const conn = createMockConn();
+    const sync = new SyncManager(conn);
+    sync.onStateUpdate = vi.fn();
+    sync.startGame([
+      { name: 'Red', color: 'red' },
+      { name: 'Green', color: 'green' },
+      { name: 'Blue', color: 'blue' },
+    ]);
+    sync.setupListeners();
+    const state = sync.getState();
+    state.sequence = 7;
+    state.players.green.pieces[0].position = 5;
+    state.players.green.pieces[0].isHome = false;
+    state.players.green.pieces[0].isActive = true;
+    sync.setState(state);
+
+    // Red is the current turn and is the departed host -> turn advances.
+    const result = sync.takeoverAsHost(state, ['red']);
+
+    expect(result.gameStatus).toBe(GAME_STATUS.IN_PROGRESS);
+    expect(result.players.red.isDisconnected).toBe(true);
+    expect(result.players.red.pieces.every(p => p.isFinished)).toBe(true);
+    expect(result.currentTurn).toBe('green');
+    expect(result.gamePhase).toBe(GAME_PHASES.ROLLING);
+
+    const broadcasts = conn.messages.filter(m => m.type === MESSAGE_TYPES.GAME_STATE_SYNC);
+    const last = broadcasts[broadcasts.length - 1];
+    expect(last.data.reason).toBe('host_migrated');
+    expect(last.data.sequence).toBeGreaterThan(7);
+  });
+
+  it('keeps the current turn when the departed host was not the active player', () => {
+    const conn = createMockConn();
+    const sync = new SyncManager(conn);
+    sync.onStateUpdate = vi.fn();
+    sync.startGame([
+      { name: 'Red', color: 'red' },
+      { name: 'Green', color: 'green' },
+      { name: 'Blue', color: 'blue' },
+    ]);
+    sync.setupListeners();
+    const state = sync.getState();
+    state.sequence = 5;
+    state.currentTurn = 'blue';
+    sync.setState(state);
+
+    // Red leaves but it is blue's turn -> the game continues with blue.
+    const result = sync.takeoverAsHost(state, ['red']);
+
+    expect(result.gameStatus).toBe(GAME_STATUS.IN_PROGRESS);
+    expect(result.currentTurn).toBe('blue');
+    expect(result.players.red.isDisconnected).toBe(true);
+  });
+
+  it('resets an in-flight dice roll on takeover', () => {
+    const conn = createMockConn();
+    const sync = startTwoPlayer(conn);
+    const state = sync.getState();
+    state.sequence = 9;
+    state.diceRolling = true;
+    state.diceValue = 4;
+    state.gamePhase = GAME_PHASES.ROLLING;
+    sync.setState(state);
+
+    const result = sync.takeoverAsHost(state, ['red']);
+    expect(result.diceRolling).toBe(false);
+    expect(result.gameStatus).toBe(GAME_STATUS.FINISHED);
+  });
+
+  it('is a no-op without a valid in-progress snapshot', () => {
+    const conn = createMockConn();
+    const sync = new SyncManager(conn);
+    expect(sync.takeoverAsHost(null, [])).toBeNull();
+    expect(sync.takeoverAsHost({ gameStatus: GAME_STATUS.FINISHED, players: {} }, [])).toBeNull();
   });
 });

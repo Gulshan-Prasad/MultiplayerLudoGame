@@ -257,7 +257,7 @@ export function executeMove(state, playerId, pieceId, move) {
 export function checkWinner(state) {
   const winners = [];
   for (const [pid, player] of Object.entries(state.players)) {
-    if (player.finishedPieces >= PIECES_PER_PLAYER && !player.isWinner) {
+    if (player.finishedPieces >= PIECES_PER_PLAYER) {
       winners.push(pid);
     }
   }

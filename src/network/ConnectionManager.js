@@ -178,9 +178,11 @@ export class ConnectionManager {
       this._log(`recv [${msg.type}] from ${sender.slice(0, 8)}...`);
     }
 
-    // A peer announced it left (graceful PLAYER_LEFT or LWT after abrupt drop).
-    // Remove it from the peer list immediately.
-    if (msg.type === MESSAGE_TYPES.PLAYER_LEFT && msg.data && msg.data.playerId === sender) {
+    // A peer announced it left — graceful LEAVE_ROOM or PLAYER_LEFT / LWT after
+    // an abrupt drop. Remove it from the peer list immediately either way so
+    // everyone reacts without waiting for a heartbeat timeout.
+    if ((msg.type === MESSAGE_TYPES.PLAYER_LEFT || msg.type === MESSAGE_TYPES.LEAVE_ROOM)
+      && msg.data && msg.data.playerId === sender) {
       if (this.peerIds.includes(sender)) {
         this._log(`peer left: ${sender.slice(0, 8)}... (total peers: ${this.peerIds.length - 1})`);
         this.peerIds = this.peerIds.filter(p => p !== sender);
@@ -189,7 +191,7 @@ export class ConnectionManager {
       }
       const cb = this._messageListeners[msg.type];
       if (cb) cb(msg.data, sender);
-      if (this.onPeerDisconnected) this.onPeerDisconnected(msg.data.playerId);
+      if (this.onPeerDisconnected) this.onPeerDisconnected(msg.data.playerId, msg.type);
       return;
     }
 

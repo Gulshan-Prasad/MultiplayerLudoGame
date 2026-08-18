@@ -139,6 +139,54 @@ describe('SELECT_PIECE', () => {
     expect(state.currentTurn).toBe('red');
     expect(state.gamePhase).toBe(GAME_PHASES.ROLLING);
   });
+
+  it('grants an extra roll when a piece reaches the finish (like a capture)', () => {
+    let state = startedState();
+    // Red's piece 0 is one step from the finish; a second movable piece keeps
+    // the roll of 1 on the SELECTING_PIECE path.
+    state.players.red.pieces[0].position = 55;
+    state.players.red.pieces[0].isHome = false;
+    state.players.red.pieces[0].isActive = true;
+    state.players.red.pieces[1].position = 5;
+    state.players.red.pieces[1].isHome = false;
+    state.players.red.pieces[1].isActive = true;
+
+    state = gameReducer(state, { type: 'ROLL_DICE', payload: { value: 1 } });
+    state = gameReducer(state, { type: 'DICE_ANIMATION_DONE' });
+    expect(state.gamePhase).toBe(GAME_PHASES.SELECTING_PIECE);
+
+    const finishMove = state.availableMoves.find(m => m.pieceId === 0 && m.finishes);
+    expect(finishMove).toBeTruthy();
+
+    state = gameReducer(state, { type: 'SELECT_PIECE', payload: 0 });
+    expect(state.players.red.pieces[0].position).toBe(56);
+    expect(state.players.red.pieces[0].isFinished).toBe(true);
+    // Finishing a piece grants a reroll, just like a capture.
+    expect(state.currentTurn).toBe('red');
+    expect(state.gamePhase).toBe(GAME_PHASES.ROLLING);
+  });
+
+  it('ends the game and declares the winner when the last piece finishes', () => {
+    let state = startedState();
+    state.players.red.pieces[0].position = 56;
+    state.players.red.pieces[0].isFinished = true;
+    state.players.red.pieces[1].position = 56;
+    state.players.red.pieces[1].isFinished = true;
+    state.players.red.pieces[2].position = 56;
+    state.players.red.pieces[2].isFinished = true;
+    state.players.red.finishedPieces = 3;
+    state.players.red.pieces[3].position = 55;
+    state.players.red.pieces[3].isHome = false;
+    state.players.red.pieces[3].isActive = true;
+
+    state = gameReducer(state, { type: 'ROLL_DICE', payload: { value: 1 } });
+    state = gameReducer(state, { type: 'DICE_ANIMATION_DONE' });
+
+    expect(state.players.red.finishedPieces).toBe(PIECES_PER_PLAYER);
+    expect(state.gameStatus).toBe(GAME_STATUS.FINISHED);
+    expect(state.gamePhase).toBe(GAME_PHASES.GAME_OVER);
+    expect(state.winner).toBe('red');
+  });
 });
 
 describe('UNDO_MOVE', () => {

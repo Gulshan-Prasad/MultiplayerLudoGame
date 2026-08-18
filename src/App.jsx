@@ -17,7 +17,7 @@ import CoolNameInput from './components/CoolNameInput';
 import WinnerModal from './components/WinnerModal';
 import GameSoundEffects from './components/GameSoundEffects';
 import { subscribeSound, getSoundMuted, toggleMute, playSound } from './utils/sound';
-import { GAME_STATUS, GAME_PHASES, COLOR_MAP, STORAGE_KEY, PLAYER_NAME_STORAGE_KEY } from './data/constants';
+import { GAME_STATUS, GAME_PHASES, COLOR_MAP, PLAYER_NAME_STORAGE_KEY, PLAYER_PROFILE_PIC_STORAGE_KEY } from './data/constants';
 
 function SoundToggle() {
   const muted = useSyncExternalStore(subscribeSound, getSoundMuted, () => false);
@@ -55,7 +55,7 @@ function DiceDot({ cx, cy }) {
 function LeaveButton({ onClick, label = 'Leave', ariaLabel = 'Leave game' }) {
   return (
     <button
-      onClick={(e) => { onClick?.(e); playSound('navigate'); }}
+      onClick={onClick}
       aria-label={ariaLabel}
       title={label}
       className="btn-3d btn-3d-red btn-sm w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 rounded-lg p-0"
@@ -77,7 +77,7 @@ function GameScreenShell({ leaveButton, playerPanels, board, belowBoard, info, d
         </div>
       </header>
 
-      <main className={`flex-1 min-h-0 flex gap-1.5 sm:gap-3 px-1.5 sm:px-3 py-1.5 sm:py-3 min-w-0 ${desktopChatOffset ? 'lg:pr-[268px]' : ''}`}>
+      <main className={`flex-1 min-h-0 flex gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-1.5 sm:py-2 min-w-0 ${desktopChatOffset ? 'lg:pr-[268px]' : ''}`}>
         <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-1.5 sm:gap-2">
           <div className="w-full aspect-square min-h-0 [@media(min-width:768px)_and_(min-height:500px)]:aspect-auto [@media(min-width:768px)_and_(min-height:500px)]:flex-1">
             {board}
@@ -94,9 +94,9 @@ function GameScreenShell({ leaveButton, playerPanels, board, belowBoard, info, d
               <div className="min-w-0 flex items-center">
                 {info}
               </div>
-              <div className="flex flex-col items-center justify-center h-[196px] sm:h-[244px]">
+              <div className="flex flex-col items-center justify-center h-[150px] sm:h-[170px]">
                 {dice}
-                <div className="h-[48px] flex items-center justify-center w-full min-w-0">
+                <div className="h-[44px] flex items-center justify-center w-full min-w-0">
                   {belowBoard}
                 </div>
               </div>
@@ -106,8 +106,8 @@ function GameScreenShell({ leaveButton, playerPanels, board, belowBoard, info, d
           </div>
         </div>
 
-        <aside className="hidden [@media(min-width:768px)_and_(min-height:500px)]:flex [@media(min-width:768px)_and_(min-height:500px)]:flex-col w-60 md:w-72 xl:w-80 flex-shrink-0 gap-2 min-h-0">
-          <div className="card-classic p-3 sm:p-4 flex-shrink-0 h-[330px] flex flex-col items-center justify-center overflow-hidden">
+        <aside className="hidden [@media(min-width:768px)_and_(min-height:500px)]:flex [@media(min-width:768px)_and_(min-height:500px)]:flex-col w-48 md:w-56 xl:w-60 flex-shrink-0 gap-2 min-h-0">
+          <div className="card-classic p-3 sm:p-4 flex-shrink-0 h-[270px] flex flex-col items-center justify-center overflow-hidden">
             {info}
             <div className="mt-2 sm:mt-3 flex-shrink-0">{dice}</div>
           </div>
@@ -267,11 +267,13 @@ function MultiplayerGameContent() {
 
       <div
         className={`
-          relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl select-none
+          relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-xl select-none
           transition-all duration-300 dice-3d
           ${gamePhase === GAME_PHASES.ROLLING && !diceRolling && isActivePlayer
             ? 'cursor-pointer hover:scale-110 hover:shadow-xl active:scale-95 animate-dice-wiggle dice-3d-glow'
-            : 'dice-3d-idle opacity-70'}
+            : gamePhase === GAME_PHASES.SELECTING_PIECE && isActivePlayer
+              ? 'dice-3d-select'
+              : 'dice-3d-idle opacity-60'}
           ${shaking ? 'animate-dice-roll' : ''}
           ${!shaking && landing ? 'animate-dice-land' : ''}
         `}
@@ -326,10 +328,9 @@ function MultiplayerGameContent() {
 }
 
 function LocalGameContent() {
-  const { state, saveGame, loadGame, undoMove, newGame, resetState } = useGame();
+  const { state, saveGame, undoMove, newGame, resetState } = useGame();
   const navigate = useNavigate();
   const { gameStatus, players, currentTurn, gamePhase, moveHistory } = state;
-  const hasSavedGame = !!localStorage.getItem(STORAGE_KEY);
 
   const playerEntries = Object.entries(players);
   const currentPlayer = players[currentTurn];
@@ -353,6 +354,7 @@ function LocalGameContent() {
           playerId={pid}
           player={player}
           isCurrentTurn={pid === currentTurn}
+          profilePic={player.profilePic}
         />
       ))}
     </div>
@@ -402,14 +404,6 @@ function LocalGameContent() {
       >
         Save
       </button>
-      {hasSavedGame && (
-        <button
-          onClick={() => { playSound('load'); loadGame(); }}
-          className="btn-3d btn-3d-purple btn-sm flex-1 min-w-[64px]"
-        >
-          Load
-        </button>
-      )}
       <button
         onClick={() => { playSound('undo'); undoMove(); }}
         className="btn-3d btn-3d-gray btn-sm flex-1 min-w-[64px]"
@@ -488,7 +482,13 @@ function OnlineRoomView() {
       return '';
     }
   });
-  const [profilePic, setProfilePic] = useState(null);
+  const [profilePic, setProfilePic] = useState(() => {
+    try {
+      return localStorage.getItem(PLAYER_PROFILE_PIC_STORAGE_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
   const [error, setError] = useState('');
 
   // Remember the name locally so the user doesn't have to retype it.
@@ -499,6 +499,15 @@ function OnlineRoomView() {
       // storage may be unavailable; ignore
     }
   }, [playerName]);
+
+  // Remember the picture too, so it doesn't reshuffle on reload.
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAYER_PROFILE_PIC_STORAGE_KEY, profilePic || '');
+    } catch {
+      // storage may be unavailable; ignore
+    }
+  }, [profilePic]);
 
   const code = (routeCode || '').toUpperCase().replace(/\s/g, '');
 
@@ -621,14 +630,31 @@ function OnlineRoomView() {
 function DisconnectBanner() {
   const network = useNetwork();
   const location = useLocation();
-  if (!network.disconnectNotice) return null;
-  // Only show inside the online flow; a notice can be stale after leaving a
-  // session via browser back.
-  if (!location.pathname.startsWith('/online')) return null;
+  const [hide, setHide] = useState(false);
+  const timerRef = useRef(null);
+
+  const notice = network.disconnectNotice;
+  const show = !!notice && location.pathname.startsWith('/online');
+
+  // Auto-hide: every time a notice appears (or is refreshed) it fades out
+  // after a short delay instead of sitting on screen forever.
+  useEffect(() => {
+    if (!show) {
+      setHide(false);
+      return undefined;
+    }
+    setHide(false);
+    timerRef.current = setTimeout(() => setHide(true), 3500);
+    return () => clearTimeout(timerRef.current);
+  }, [notice, show]);
+
+  if (!show) return null;
   return (
-    <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[60] pointer-events-none">
+    <div
+      className={`fixed top-2 left-1/2 -translate-x-1/2 z-[60] pointer-events-none transition-opacity duration-700 ${hide ? 'opacity-0' : 'opacity-100'}`}
+    >
       <div className="btn-3d btn-3d-red btn-md px-4 py-2 text-sm shadow-lg animate-slideIn">
-        ⚠ {network.disconnectNotice}
+        ⚠ {notice}
       </div>
     </div>
   );

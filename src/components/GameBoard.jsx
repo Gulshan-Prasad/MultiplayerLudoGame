@@ -95,14 +95,14 @@ function GridOverlay({ selectableCells, handleSelectPiece, availableMoves, playe
 function GameBoard({ onSelectPiece }) {
   const gameCtx = useGame();
   const { state, selectPiece: contextSelectPiece } = gameCtx;
-  const { players, currentTurn, gamePhase, availableMoves, lastMove, moveHistory } = state;
+  const { players, currentTurn, gamePhase, availableMoves, lastMove } = state;
   // Wrap the piece-picking action so clicking a selectable piece (or its
   // target cell) plays the pick-up blip.
   const handleSelectPiece = useCallback((pieceId) => {
     playSound('piece_select');
     (onSelectPiece || contextSelectPiece)(pieceId);
   }, [onSelectPiece, contextSelectPiece]);
-  const lastMoveCountRef = useRef(moveHistory?.length || 0);
+  const lastMoveKeyRef = useRef(null);
   const justMovedKeyRef = useRef(null);
 
   const [animState, setAnimState] = useState(null);
@@ -117,16 +117,19 @@ function GameBoard({ onSelectPiece }) {
   // Animate the mover forward AND every captured piece backwards to its home
   // base (instead of teleporting). Multiple pieces may animate at once.
   useLayoutEffect(() => {
-    if (!lastMove) return;
-    const historyLen = moveHistory?.length || 0;
-    // History shrank (undo/load): resync so the *next* move still animates,
-    // but never replay a move that was already shown.
-    if (historyLen < lastMoveCountRef.current) {
-      lastMoveCountRef.current = historyLen;
+    if (!lastMove) {
+      // Game reset / rematch: forget the previous move so the first move of a
+      // new game always animates.
+      lastMoveKeyRef.current = null;
       return;
     }
-    if (historyLen <= lastMoveCountRef.current) return;
-    lastMoveCountRef.current = historyLen;
+    // Trigger on the move's content signature, not moveHistory.length: the
+    // reducer caps moveHistory at 50, so after ~50 moves the length stops
+    // changing and the old gate skipped every later move (pieces teleported
+    // straight to their rolled destination).
+    const moveKey = `${lastMove.player}-${lastMove.piece}-${lastMove.from}-${lastMove.to}`;
+    if (moveKey === lastMoveKeyRef.current) return;
+    lastMoveKeyRef.current = moveKey;
 
     justMovedKeyRef.current = `${lastMove.player}-${lastMove.piece}`;
     setTimeout(() => { justMovedKeyRef.current = null; }, 600);
@@ -189,7 +192,7 @@ function GameBoard({ onSelectPiece }) {
         setAnimState(nextAnim);
       }
     }
-  }, [lastMove, moveHistory?.length, players]);
+  }, [lastMove, players]);
 
   useEffect(() => {
     if (!animState) return;
@@ -216,11 +219,7 @@ function GameBoard({ onSelectPiece }) {
         }, frameDelay);
         return () => clearTimeout(t);
       }
-      // The last group just finished — if a piece was captured, its retreat
-      // back home is complete too.
-      if (animState.groups.length > 1) {
-        playSound('sent_home');
-      }
+      // The last group just finished — the retreat back home is complete too.
       const t = setTimeout(() => {
         const next = animQueueRef.current.shift();
         setAnimState(next || null);
@@ -280,10 +279,13 @@ function GameBoard({ onSelectPiece }) {
 
     for (const [pid, player] of Object.entries(players)) {
       for (const piece of player.pieces) {
-        if (piece.isFinished) continue;
-
         const animation = animationLookup[`${pid}-${piece.id}`];
         const isAnimating = !!animation;
+
+        // Finished pieces stay hidden once their arrival animation has played;
+        // while the animation is running they still render so the walk to the
+        // last step (the finish cell) is visible.
+        if (piece.isFinished && !isAnimating) continue;
 
         let displayRow, displayCol, isHome;
 

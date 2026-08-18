@@ -68,6 +68,12 @@ function Dice() {
         ? 'animate-dice-land'
         : '';
 
+  const dieStateClass = canRoll
+    ? 'hover:scale-110 hover:shadow-2xl active:scale-95 dice-3d-glow'
+    : gamePhase === GAME_PHASES.SELECTING_PIECE
+      ? 'dice-3d-select'
+      : 'dice-3d-idle opacity-60';
+
   const shownValue = (rolling ? displayValue : (diceValue > 0 ? diceValue : displayValue)) || 0;
 
   return (
@@ -80,9 +86,9 @@ function Dice() {
 
       <div
         className={`
-          relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 rounded-2xl select-none cursor-pointer
+          relative w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-2xl select-none cursor-pointer
           transition-all duration-300 dice-3d
-          ${canRoll ? 'hover:scale-110 hover:shadow-2xl active:scale-95' : 'dice-3d-idle'}
+          ${dieStateClass}
           ${diceAnimation}
         `}
         onClick={handleRoll}

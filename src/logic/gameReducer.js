@@ -100,7 +100,7 @@ export function gameReducer(state, action) {
         const winners = checkWinner(newState);
         for (const w of winners) {
           if (newState.players[w]) newState.players[w].isWinner = true;
-          newState.winner = w;
+          if (!newState.winner) newState.winner = w;
         }
         const gameOver = winners.length > 0 && isGameOver(newState);
 
@@ -116,11 +116,12 @@ export function gameReducer(state, action) {
         }
 
         const cutPiece = !!(newState.lastMove && newState.lastMove.killed);
+        const finishedPiece = !!(newState.lastMove && newState.lastMove.finish);
 
         return {
           ...newState,
           diceRolling: false,
-          gamePhase: (isSix || cutPiece) ? GAME_PHASES.ROLLING : GAME_PHASES.TURN_COMPLETE,
+          gamePhase: (isSix || cutPiece || finishedPiece) ? GAME_PHASES.ROLLING : GAME_PHASES.TURN_COMPLETE,
           availableMoves: [],
           selectedPiece: null,
         };
@@ -151,7 +152,7 @@ export function gameReducer(state, action) {
       const winners = checkWinner(newState);
       for (const w of winners) {
         if (newState.players[w]) newState.players[w].isWinner = true;
-        newState.winner = w;
+        if (!newState.winner) newState.winner = w;
       }
       const gameOver = winners.length > 0 && isGameOver(newState);
 
@@ -173,7 +174,7 @@ export function gameReducer(state, action) {
         ...newState,
         diceRolling: false,
         consecutiveSixes: isSix ? (state.consecutiveSixes) : 0,
-        gamePhase: (isSix || cutPiece) ? GAME_PHASES.ROLLING : GAME_PHASES.TURN_COMPLETE,
+        gamePhase: (isSix || cutPiece || (newState.lastMove && newState.lastMove.finish)) ? GAME_PHASES.ROLLING : GAME_PHASES.TURN_COMPLETE,
         availableMoves: [],
         selectedPiece: null,
       };
@@ -225,21 +226,6 @@ export function gameReducer(state, action) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
       } catch (e) {
         console.error('Failed to save game:', e);
-      }
-      return state;
-    }
-
-    case 'LOAD_GAME': {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.gameStatus === GAME_STATUS.IN_PROGRESS || parsed.gameStatus === GAME_STATUS.FINISHED) {
-            return { ...parsed, diceRolling: false };
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load game:', e);
       }
       return state;
     }

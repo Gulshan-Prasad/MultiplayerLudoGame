@@ -1,7 +1,6 @@
-import { memo, useCallback, useMemo, useEffect, useRef } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNetwork } from '../network/useNetwork';
-import { playSound } from '../utils/sound';
 
 const PIECE_IMAGES = {
   red: '/textures/pieces/RedPlayer.png',
@@ -97,32 +96,8 @@ function MultiplayerLobby() {
   const copyRoomCode = useCallback(() => {
     if (displayCode) {
       navigator.clipboard.writeText(displayCode).catch(() => {});
-      playSound('copy_code');
     }
   }, [displayCode]);
-
-  // Play a sound whenever the room roster or readiness changes: a player
-  // joined, left, or toggled their ready state.
-  const prevLobbyRef = useRef(null);
-  useEffect(() => {
-    const prev = prevLobbyRef.current;
-    prevLobbyRef.current = lobby;
-    if (!lobby || !prev) return;
-
-    const prevById = new Map(prev.players.map(p => [p.id, p]));
-    for (const p of lobby.players) {
-      const was = prevById.get(p.id);
-      if (!was) {
-        playSound('player_join');
-      } else if (was.isReady !== p.isReady) {
-        playSound(p.isReady ? 'ready' : 'unready');
-      }
-    }
-    const curIds = new Set(lobby.players.map(p => p.id));
-    for (const p of prev.players) {
-      if (!curIds.has(p.id)) playSound('player_leave');
-    }
-  }, [lobby]);
 
   const handleLeave = useCallback(() => {
     leaveRoom();

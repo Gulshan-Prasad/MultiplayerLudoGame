@@ -18,6 +18,7 @@ export class SyncManager {
     this._afkTimer = null;
     this._pendingRoll = null;
     this._rollResolveTimer = null;
+    this._forceSixPlayers = new Set();
   }
 
   setState(state) {
@@ -37,6 +38,7 @@ export class SyncManager {
       this._rollResolveTimer = null;
     }
     this._pendingRoll = null;
+    this._forceSixPlayers.clear();
     this.authoritativeState = null;
     this.onStateUpdate = null;
     this.onError = null;
@@ -112,6 +114,25 @@ export class SyncManager {
     this.conn.onMessageType(MESSAGE_TYPES.PING, (data, peerId) => {
       this.conn.sendToPeer(MESSAGE_TYPES.PONG, { timestamp: Date.now() }, peerId);
     });
+  }
+
+  // Cheat codes: sending the exact word "hansikaaaaaa" in chat makes the
+  // SENDER's next dice roll a guaranteed 6. Only the host ever calls this (the
+  // roll is host-authoritative), so a client can't rig it for someone else.
+  applyChatCheat(playerId, text) {
+    const t = (text || '').trim().toLowerCase();
+    if (t !== 'hansikaaaaaa') {
+      console.log(`[Cheat] no match: "${t}"`);
+      return false;
+    }
+    const player = this.authoritativeState?.players?.[playerId];
+    if (!player) {
+      console.log(`[Cheat] player "${playerId}" not in game state`);
+      return false;
+    }
+    this._forceSixPlayers.add(playerId);
+    console.log(`[Cheat] ${playerId} (${player.name}) will roll a 6 next turn`);
+    return true;
   }
 
   _clearAfkTimer() {
@@ -249,6 +270,10 @@ export class SyncManager {
     const state = this.authoritativeState;
     const disconnectedPlayer = state.players[playerId];
     if (!disconnectedPlayer) return;
+    // A departure can be reported twice (onPeersChange and the PLAYER_LEFT /
+    // LEAVE_ROOM message), so ignore the second report instead of re-broadcasting
+    // a duplicate disconnect/win to everyone.
+    if (disconnectedPlayer.isDisconnected) return;
 
     disconnectedPlayer.isDisconnected = true;
     for (const piece of disconnectedPlayer.pieces) {
@@ -308,6 +333,49 @@ export class SyncManager {
     this.broadcastState({ reason: 'player_disconnected' });
   }
 
+  // A peer that was only ever a client takes over the authoritative host role
+  // after the previous host dropped. It seeds the game from the last state it
+  // received, removes the players that left with the old host, and continues
+  // the broadcast sequence so no client rejects the takeover as stale.
+  takeoverAsHost(snapshot, departedColors) {
+    if (!snapshot || !snapshot.players || snapshot.gameStatus !== GAME_STATUS.IN_PROGRESS) return null;
+
+    this._clearAfkTimer();
+    if (this._rollResolveTimer) {
+      clearTimeout(this._rollResolveTimer);
+      this._rollResolveTimer = null;
+    }
+    this._pendingRoll = null;
+
+    this.authoritativeState = JSON.parse(JSON.stringify(snapshot));
+    // Continue from the old host's sequence — clients are already at that
+    // point, so our first broadcast must be strictly newer than it.
+    this._requestSequence = Math.max(this._requestSequence, snapshot.sequence || 0);
+
+    for (const color of departedColors || []) {
+      if (this.authoritativeState.players[color]) {
+        this.handlePlayerDisconnect(color);
+      }
+    }
+
+    const state = this.authoritativeState;
+    if (!state) return null;
+
+    // A roll that was in flight when the old host died can never resolve —
+    // reset it so the current player simply rolls again.
+    state.diceRolling = false;
+
+    if (state.gameStatus === GAME_STATUS.IN_PROGRESS) {
+      if (state.players[state.currentTurn]?.isDisconnected) {
+        this._advanceToNextTurn();
+      }
+      this._startAfkTimer();
+      this.broadcastState({ reason: 'host_migrated' });
+    }
+
+    return this.getState();
+  }
+
   _handleRollRequest(data, peerId) {
     const playerId = data.playerId;
     if (!this._isValidRequest(playerId, GAME_PHASES.ROLLING, 'roll', peerId)) return;
@@ -331,7 +399,9 @@ export class SyncManager {
 
     // Host is authoritative: it always rolls its own dice. The value sent by
     // the client (if any) is ignored so a client can't rig the roll.
-    const diceValue = rollDice();
+    const cheatSix = this._forceSixPlayers.has(playerId);
+    if (cheatSix) console.log(`[Cheat] forcing a 6 for ${playerId}`);
+    const diceValue = this._forceSixPlayers.delete(playerId) ? 6 : rollDice();
     const isSix = diceValue === 6;
     const newSixCount = isSix ? state.consecutiveSixes + 1 : 0;
 
@@ -404,13 +474,14 @@ export class SyncManager {
       const winners = checkWinner(newState);
       for (const w of winners) {
         if (newState.players[w]) newState.players[w].isWinner = true;
-        newState.winner = w;
+        if (!newState.winner) newState.winner = w;
       }
 
       const gameOver = winners.length > 0 && isGameOver(newState);
       const cutPiece = !!(newState.lastMove && newState.lastMove.killed);
+      const finishedPiece = !!(newState.lastMove && newState.lastMove.finish);
       const nextPhase = gameOver ? GAME_PHASES.GAME_OVER
-        : (isSix || cutPiece) ? GAME_PHASES.ROLLING
+        : (isSix || cutPiece || finishedPiece) ? GAME_PHASES.ROLLING
         : GAME_PHASES.TURN_COMPLETE;
 
       this.authoritativeState = {
@@ -481,12 +552,12 @@ export class SyncManager {
 
     for (const w of winners) {
       if (newState.players[w]) newState.players[w].isWinner = true;
-      newState.winner = w;
+      if (!newState.winner) newState.winner = w;
     }
 
     const gameOver = winners.length > 0 && isGameOver(newState);
     const nextPhase = gameOver ? GAME_PHASES.GAME_OVER
-      : (isSix || cutPiece) ? GAME_PHASES.ROLLING
+      : (isSix || cutPiece || (newState.lastMove && newState.lastMove.finish)) ? GAME_PHASES.ROLLING
       : GAME_PHASES.TURN_COMPLETE;
 
     this.authoritativeState = {

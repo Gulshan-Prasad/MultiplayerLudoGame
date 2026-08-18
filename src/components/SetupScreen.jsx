@@ -1,7 +1,7 @@
 import { useState, useEffect, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
-import { PLAYER_COLORS, STORAGE_KEY, PLAYER_NAMES_STORAGE_KEY } from '../data/constants';
+import { PLAYER_COLORS, PLAYER_NAMES_STORAGE_KEY, PLAYER_PICS_STORAGE_KEY } from '../data/constants';
 import CoolNameInput from './CoolNameInput';
 
 const PIECE_IMAGES = {
@@ -13,7 +13,7 @@ const PIECE_IMAGES = {
 
 function SetupScreen() {
   const navigate = useNavigate();
-  const { startGame, loadGame } = useGame();
+  const { startGame } = useGame();
   const [playerCount, setPlayerCount] = useState(4);
   const [playerNames, setPlayerNames] = useState(() => {
     try {
@@ -25,8 +25,17 @@ function SetupScreen() {
     return ['Red', 'Green', 'Yellow', 'Blue'];
   });
   const [error, setError] = useState('');
-
-  const savedGameExists = !!localStorage.getItem(STORAGE_KEY);
+  const [playerPics, setPlayerPics] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PLAYER_PICS_STORAGE_KEY) || 'null');
+      if (Array.isArray(saved)) {
+        return PLAYER_COLORS.map((_, i) => saved[i] || null);
+      }
+    } catch {
+      // ignore malformed saved pics
+    }
+    return PLAYER_COLORS.map(() => null);
+  });
 
   // Remember the names locally so the user doesn't have to retype them.
   useEffect(() => {
@@ -37,6 +46,15 @@ function SetupScreen() {
     }
   }, [playerNames]);
 
+  // Remember the chosen pictures locally, same as the names.
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAYER_PICS_STORAGE_KEY, JSON.stringify(playerPics));
+    } catch {
+      // storage may be unavailable; ignore
+    }
+  }, [playerPics]);
+
   const handleNameChange = useCallback((index, value) => {
     setPlayerNames(prev => {
       const next = [...prev];
@@ -44,6 +62,14 @@ function SetupScreen() {
       return next;
     });
     setError('');
+  }, []);
+
+  const handlePicChange = useCallback((index, value) => {
+    setPlayerPics(prev => {
+      const next = [...prev];
+      next[index] = value || null;
+      return next;
+    });
   }, []);
 
   const handleStart = useCallback(() => {
@@ -57,8 +83,12 @@ function SetupScreen() {
       setError('Player names must be unique');
       return;
     }
-    startGame(names.map((name, i) => ({ name: name.trim(), color: PLAYER_COLORS[i] })));
-  }, [playerNames, playerCount, startGame]);
+    startGame(names.map((name, i) => ({
+      name: name.trim(),
+      color: PLAYER_COLORS[i],
+      profilePic: playerPics[i] || null,
+    })));
+  }, [playerNames, playerCount, playerPics, startGame]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 page-bg relative overflow-hidden">
@@ -69,15 +99,23 @@ function SetupScreen() {
         draggable={false}
       />
 
-      <div className="panel-classic p-6 md:p-8 max-w-md w-full relative z-10">
-        <div className="text-center mb-6">
-          <div className="text-5xl mb-3">🎲</div>
-          <h1 className="game-title text-3xl font-bold">Ludo Game</h1>
-          <p className="text-[#7a5c36] text-sm mt-1">Classic board game for 2-4 players</p>
+      <div className="panel-classic p-4 sm:p-6 max-w-md w-full relative z-10">
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => navigate('/')}
+            aria-label="Back to main menu"
+            className="btn-3d btn-3d-red btn-md w-11 h-11 flex items-center justify-center rounded-lg text-xl leading-none"
+          >
+            ←
+          </button>
+          <div className="flex items-center gap-2 flex-1 min-w-0 justify-center">
+            <span className="text-3xl">🎲</span>
+            <h1 className="game-title text-2xl font-bold">Ludo Game</h1>
+          </div>
         </div>
 
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-[#5b3a1e] mb-2">
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-[#5b3a1e] mb-1.5">
             Number of Players
           </label>
           <div className="flex gap-3">
@@ -98,11 +136,11 @@ function SetupScreen() {
           </div>
         </div>
 
-        <div className="space-y-4 mb-6">
+        <div className="space-y-3 mb-4">
           <label className="block text-sm font-semibold text-[#5b3a1e]">Player Names</label>
           {PLAYER_COLORS.slice(0, playerCount).map((color, i) => (
             <div key={color}>
-              <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex items-center gap-2 mb-1">
                 <img
                   src={PIECE_IMAGES[color]}
                   alt=""
@@ -116,8 +154,11 @@ function SetupScreen() {
               <CoolNameInput
                 value={playerNames[i]}
                 onChange={(v) => handleNameChange(i, v)}
+                profilePic={playerPics[i]}
+                onProfilePicChange={(v) => handlePicChange(i, v)}
                 placeholder={`Player ${i + 1}`}
                 variant="green"
+                label={null}
               />
             </div>
           ))}
@@ -131,32 +172,9 @@ function SetupScreen() {
 
         <button
           onClick={handleStart}
-          className="btn-3d btn-3d-green btn-lg btn-block mb-3"
+          className="btn-3d btn-3d-green btn-lg btn-block"
         >
-          Start Local Game
-        </button>
-
-        <button
-          onClick={() => navigate('/online')}
-          className="btn-3d btn-3d-blue btn-lg btn-block mb-3"
-        >
-          Online Multiplayer
-        </button>
-
-        {savedGameExists && (
-          <button
-            onClick={() => { loadGame(); }}
-            className="btn-3d btn-3d-purple btn-lg btn-block mb-3"
-          >
-            Load Saved Game
-          </button>
-        )}
-
-        <button
-          onClick={() => navigate('/')}
-          className="w-full py-2 text-[#7a5c36] hover:text-[#9c7a0e] text-sm transition-colors"
-        >
-          ← Back to Main Menu
+          Start Game
         </button>
       </div>
     </div>

@@ -76,7 +76,7 @@ function PlayerPanel({ playerId: _playerId, player, isCurrentTurn, isMe = false,
         }}
       />
 
-      <div className="pt-2.5 sm:pt-3 p-1 sm:p-1.5 md:p-3 lg:p-4 flex flex-col gap-1 sm:gap-1.5 md:gap-2 min-h-14 sm:min-h-20 md:min-h-24 justify-center">
+      <div className="pt-2 sm:pt-2.5 p-1 sm:p-1.5 md:p-2 lg:p-3 flex flex-col gap-1 sm:gap-1.5 md:gap-1.5 min-h-12 sm:min-h-16 md:min-h-20 justify-center">
         {/* Name row */}
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <span

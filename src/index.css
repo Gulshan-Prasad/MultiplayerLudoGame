@@ -655,6 +655,17 @@
   animation: dice-glow-pulse 1.6s ease-in-out infinite;
 }
 
+/* Die while the active player must pick which piece to move: reddish-grey */
+.dice-3d-select {
+  filter: grayscale(0.6);
+  background-color: #e0d2c8;
+  border-color: #a0522d;
+  box-shadow:
+    inset 0 0 0 2px #ffffff,
+    0 3px 0 #a0522d,
+    0 6px 10px rgba(160, 82, 45, 0.35);
+}
+
 @keyframes dice-glow-pulse {
   0%, 100% {
     box-shadow:

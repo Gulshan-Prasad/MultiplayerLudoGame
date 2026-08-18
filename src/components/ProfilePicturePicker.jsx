@@ -18,9 +18,14 @@ function ProfilePicturePicker({ value, onChange, disabled = false }) {
 
   useEffect(() => {
     if (selected === null && PROFILE_IMAGES.length > 0) {
-      setInternal(PROFILE_IMAGES[Math.floor(Math.random() * PROFILE_IMAGES.length)]);
+      const picked = PROFILE_IMAGES[Math.floor(Math.random() * PROFILE_IMAGES.length)];
+      setInternal(picked);
+      // Surface the auto-assigned picture so the parent can persist it. Without
+      // this, a fresh random picture is picked on every mount and the choice
+      // reshuffles on reload instead of being kept like the player name.
+      onChange?.(picked);
     }
-  }, [selected]);
+  }, [selected, onChange]);
 
   useEffect(() => {
     if (!open) return;

@@ -38,7 +38,6 @@ function WinnerModal() {
       resetState();
       network.leaveRoom();
     }
-    playSound('navigate');
     navigate('/');
   };
 

@@ -44,6 +44,7 @@ export function addPlayerToLobby(lobby, player) {
 }
 
 export function removePlayerFromLobby(lobby, playerId) {
+  if (!lobby) return lobby;
   const filtered = lobby.players.filter(p => p.id !== playerId);
   const isHostLeaving = lobby.hostId === playerId;
   const newHostId = isHostLeaving ? (filtered.length > 0 ? filtered[0].id : null) : lobby.hostId;
@@ -56,6 +57,7 @@ export function removePlayerFromLobby(lobby, playerId) {
 }
 
 export function updatePlayerReady(lobby, playerId, isReady) {
+  if (!lobby) return lobby;
   return {
     ...lobby,
     players: lobby.players.map(p =>
@@ -75,6 +77,7 @@ export function updatePlayerProfilePic(lobby, playerId, profilePic) {
 }
 
 export function canStartGame(lobby) {
+  if (!lobby || !lobby.players) return false;
   return lobby.playerCount >= 2 && lobby.players.every(p => p.isReady);
 }
 

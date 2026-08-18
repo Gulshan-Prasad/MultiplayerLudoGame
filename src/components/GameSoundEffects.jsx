@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
-import { useNetwork } from '../network/useNetwork';
 import { playSound } from '../utils/sound';
 import {
   GAME_PHASES, GAME_STATUS, MAX_CONSECUTIVE_SIXES, TURN_TIMER_SECONDS,
@@ -14,10 +13,6 @@ const REASON_SOUNDS = {
   no_moves: 'no_moves',
   penalty: 'penalty',
   afk_timeout: 'timeout',
-  turn_change: 'turn_change',
-  player_disconnected: 'player_leave',
-  opponent_disconnected: 'player_leave',
-  all_disconnected: 'player_leave',
   all_players_inactive: 'timeout',
 };
 
@@ -38,11 +33,9 @@ function snapshot(state) {
 }
 
 // Drives every sound that comes from the game *state* itself (turn changes,
-// skips, penalties, no-move rolls, the turn timer) plus the generic UI click
-// and hover blips, which are delegated globally so no button needs wiring.
+// skips, penalties, no-move rolls, the turn timer).
 function GameSoundEffects() {
   const { state } = useGame();
-  const network = useNetwork();
   const prevRef = useRef(snapshot(state));
   const prevReasonRef = useRef(null);
   const lowBeepKeyRef = useRef(null);
@@ -61,15 +54,10 @@ function GameSoundEffects() {
       let sound = REASON_SOUNDS[reason];
 
       // The host uses `afk_timeout` for BOTH a real AFK skip AND the normal
-      // post-move auto-advance. Distinguish them by the phase we're leaving.
+      // post-move auto-advance. The auto-advance is silent; only a real AFK
+      // skip beeps.
       if (reason === 'afk_timeout') {
-        sound = prevPhase === GAME_PHASES.TURN_COMPLETE ? 'turn_change' : 'timeout';
-      }
-
-      // Only the local player hears "your turn" in multiplayer.
-      if (sound === 'turn_change' && network.isMultiplayer && s.currentTurn !== network.myPlayerId) {
-        prevRef.current = snapshot(s);
-        return;
+        sound = prevPhase === GAME_PHASES.TURN_COMPLETE ? null : 'timeout';
       }
 
       if (sound) playSound(sound);
@@ -86,13 +74,6 @@ function GameSoundEffects() {
       playSound('game_start');
       prevRef.current = snapshot(s);
       return;
-    }
-
-    // Your turn. In multiplayer only the active player hears it.
-    if (turnChanged && s.gameStatus === GAME_STATUS.IN_PROGRESS) {
-      if (!network.isMultiplayer || nowTurn === network.myPlayerId) {
-        playSound('turn_change');
-      }
     }
 
     // Rolled but no legal move: the die resolved with nothing to move.
@@ -118,7 +99,7 @@ function GameSoundEffects() {
     }
 
     prevRef.current = snapshot(s);
-  }, [state, network.isMultiplayer, network.myPlayerId]);
+  }, [state]);
 
   // --- Turn timer about to run out -----------------------------------------
   useEffect(() => {
@@ -141,28 +122,6 @@ function GameSoundEffects() {
 
     return () => clearInterval(id);
   }, [state.gameStatus, state.gamePhase, state.diceRolling, state.currentTurn, state.turnNumber, state.turnTimer]);
-
-  // --- Global UI click / hover blips ----------------------------------------
-  useEffect(() => {
-    const isInteractive = (target) => {
-      if (!(target instanceof Element)) return false;
-      return !!target.closest('button, a, [role="button"], input, textarea, select, [role="menuitem"]');
-    };
-
-    const onClick = (e) => {
-      if (isInteractive(e.target)) playSound('click');
-    };
-    const onMouseOver = (e) => {
-      if (isInteractive(e.target)) playSound('hover');
-    };
-
-    document.addEventListener('click', onClick);
-    document.addEventListener('mouseover', onMouseOver);
-    return () => {
-      document.removeEventListener('click', onClick);
-      document.removeEventListener('mouseover', onMouseOver);
-    };
-  }, []);
 
   return null;
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNetwork } from '../network/useNetwork';
-import { PLAYER_NAME_STORAGE_KEY } from '../data/constants';
+import { PLAYER_NAME_STORAGE_KEY, PLAYER_PROFILE_PIC_STORAGE_KEY } from '../data/constants';
 import CoolNameInput from './CoolNameInput';
 
 const PLAYER_ICON = '/textures/icon/Player.png';
@@ -53,7 +53,13 @@ function MultiplayerMenu() {
       return '';
     }
   });
-  const [profilePic, setProfilePic] = useState(null);
+  const [profilePic, setProfilePic] = useState(() => {
+    try {
+      return localStorage.getItem(PLAYER_PROFILE_PIC_STORAGE_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
   const [joinCode, setJoinCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [error, setError] = useState('');
@@ -67,6 +73,15 @@ function MultiplayerMenu() {
       // storage may be unavailable; ignore
     }
   }, [playerName]);
+
+  // Remember the picture too, so it doesn't reshuffle on reload.
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAYER_PROFILE_PIC_STORAGE_KEY, profilePic || '');
+    } catch {
+      // storage may be unavailable; ignore
+    }
+  }, [profilePic]);
 
   // Stay in a locked "connecting…" state until we land in the lobby.
   // Clear it on failure so the player can retry.

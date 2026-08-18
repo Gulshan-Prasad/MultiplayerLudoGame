@@ -70,10 +70,6 @@ export function GameProvider({ children }) {
     dispatch({ type: 'SAVE_GAME' });
   }, []);
 
-  const loadGame = useCallback(() => {
-    dispatch({ type: 'LOAD_GAME' });
-  }, []);
-
   const undoMove = useCallback(() => {
     dispatch({ type: 'UNDO_MOVE' });
   }, []);
@@ -103,7 +99,6 @@ export function GameProvider({ children }) {
     endTurn,
     newGame,
     saveGame,
-    loadGame,
     undoMove,
     resetGame,
     resetState,

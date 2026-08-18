@@ -42,13 +42,15 @@ function CoolNameInput({
 
   return (
     <div>
-      <label
-        className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide mb-1.5"
-        style={{ color: accent.text }}
-      >
-        <img src={PLAYER_ICON} alt="" className="w-4 h-4 object-contain" draggable={false} />
-        {label}
-      </label>
+      {label && (
+        <label
+          className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide mb-1.5"
+          style={{ color: accent.text }}
+        >
+          <img src={PLAYER_ICON} alt="" className="w-4 h-4 object-contain" draggable={false} />
+          {label}
+        </label>
+      )}
       <div className="flex items-stretch gap-3">
         <ProfilePicturePicker
           disabled={disabled}

@@ -37,6 +37,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
   const hostPeerIdRef = useRef(null);
   const networkRoleRef = useRef(NETWORK_ROLE.NONE);
   const joinRetryTimerRef = useRef(null);
+  const disconnectNoticeTimerRef = useRef(null);
   const gameStateRef = useRef(null);
 
   const _stopJoinRetry = useCallback(() => {
@@ -81,6 +82,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       const oldPeerIds = _prevPeerIdsRef.current;
       const leftPeerIds = oldPeerIds.filter(pid => pid !== myId && !newPeerIds.includes(pid));
       const currentLobby = lobbyRef.current;
+      const departedColors = [];
       if (leftPeerIds.length > 0 && currentLobby) {
         const colors = ['red', 'green', 'yellow', 'blue'];
         for (const leftPid of leftPeerIds) {
@@ -88,6 +90,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
           const playerColor = playerEntry ? playerEntry.color : null;
           if (playerColor && colors.includes(playerColor)) {
             console.log(`[Ludo] Peer disconnected: ${leftPid} (${playerColor}), updating game state`);
+            departedColors.push(playerColor);
             if (syncRef.current) {
               syncRef.current.handlePlayerDisconnect(playerColor);
             }
@@ -101,34 +104,39 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       }
       _prevPeerIdsRef.current = newPeerIds;
 
-      // If the host left during an in-progress game and only we remain, the game
-      // can't continue (the host is authoritative), so resolve a win for us.
-      if (networkRoleRef.current === NETWORK_ROLE.CLIENT
-        && peers.length === 0
-        && leftPeerIds.includes(hostPeerIdRef.current)) {
-        const last = gameStateRef.current;
-        if (last && last.gameStatus === GAME_STATUS.IN_PROGRESS && last.players) {
-          const me = currentLobby ? currentLobby.players.find(p => p.id === myId) : null;
-          const myColor = me ? me.color : null;
-          if (myColor && last.players[myColor]) {
-            const players = JSON.parse(JSON.stringify(last.players));
-            players[myColor].isWinner = true;
-            const rankings = [
-              { playerId: myColor, rank: 1, name: players[myColor].name, color: players[myColor].color },
-              ...Object.entries(players)
-                .filter(([id]) => id !== myColor)
-                .map(([id, p]) => ({ playerId: id, rank: 2, name: p.name, color: p.color })),
-            ];
-            onGameStateReceived({
-              ...last,
-              players,
-              winner: myColor,
-              gamePhase: GAME_PHASES.GAME_OVER,
-              gameStatus: GAME_STATUS.FINISHED,
-              rankings,
-              sequence: (last.sequence || 0) + 1,
-            });
+      // Host migration: when the old host drops, the lowest remaining peer
+      // (deterministic election via getHostPeerId) becomes the new host. If
+      // that's us, promote ourselves and take over the authoritative game
+      // (which also removes the departed host's pieces). Everyone else just
+      // repoints at the new host and resyncs, so a dropped host never
+      // softlocks the room.
+      const prevHostId = hostPeerIdRef.current;
+      const newHostId = connRef.current.getHostPeerId();
+      const oldHostLeft = !!prevHostId && leftPeerIds.includes(prevHostId);
+
+      if (oldHostLeft) {
+        hostPeerIdRef.current = newHostId;
+
+        if (newHostId === myId) {
+          console.log('[Ludo] Old host left; I am now the host');
+          networkRoleRef.current = NETWORK_ROLE.HOST;
+          setNetworkRole(NETWORK_ROLE.HOST);
+
+          setLobby(prev => {
+            if (!prev) return prev;
+            const players = prev.players.map(p => ({ ...p, isHost: p.id === myId }));
+            const updated = { ...prev, players, hostId: myId };
+            lobbyRef.current = updated;
+            return updated;
+          });
+
+          const last = gameStateRef.current;
+          if (last && last.gameStatus === GAME_STATUS.IN_PROGRESS && last.players && syncRef.current) {
+            syncRef.current.takeoverAsHost(last, departedColors);
           }
+        } else {
+          console.log('[Ludo] Old host left; new host is', newHostId.slice(0, 8) + '...');
+          connRef.current?.sendToPeer(MESSAGE_TYPES.FULL_STATE_SYNC, { request: true }, newHostId);
         }
       }
 
@@ -166,12 +174,16 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
     };
 
-    connRef.current.onPeerDisconnected = (peerId) => {
+    connRef.current.onPeerDisconnected = (peerId, type) => {
       console.log('[Ludo] Peer disconnected (LWT/immediate):', peerId.slice(0, 8) + '...');
       const currentLobby = lobbyRef.current;
       const playerEntry = currentLobby?.players.find(p => p.id === peerId);
       if (playerEntry) {
-        setDisconnectNotice(`${playerEntry.name} disconnected`);
+        setDisconnectNotice(type === MESSAGE_TYPES.LEAVE_ROOM
+          ? `${playerEntry.name} left the game`
+          : `${playerEntry.name} disconnected`);
+        clearTimeout(disconnectNoticeTimerRef.current);
+        disconnectNoticeTimerRef.current = setTimeout(() => setDisconnectNotice(null), 5000);
       }
     };
 
@@ -219,6 +231,24 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       });
     });
 
+    connRef.current.onMessageType(MESSAGE_TYPES.LEAVE_ROOM, (data, _pId) => {
+      if (!data || !data.playerId) return;
+      const currentLobby = lobbyRef.current;
+      if (currentLobby) {
+        const colors = ['red', 'green', 'yellow', 'blue'];
+        const playerEntry = currentLobby.players.find(p => p.id === data.playerId);
+        const playerColor = playerEntry ? playerEntry.color : null;
+        if (playerColor && colors.includes(playerColor) && syncRef.current) {
+          syncRef.current.handlePlayerDisconnect(playerColor);
+        }
+      }
+      setLobby(prev => {
+        const updated = removePlayerFromLobby(prev, data.playerId);
+        lobbyRef.current = updated;
+        return updated;
+      });
+    });
+
     connRef.current.onMessageType(MESSAGE_TYPES.READY_CHANGED, (data, _pId) => {
       setLobby(prev => updatePlayerReady(prev, data.playerId, data.isReady));
     });
@@ -237,7 +267,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
         const deserialized = deserializeGameState(data.state);
         const corrected = _correctTurnTimer(deserialized, data.timestamp);
         console.log('[Ludo] GAME_STATE_SYNC received (phase:', deserialized.gamePhase, ', sequence:', data.sequence || 0, ')');
-        gameStateRef.current = corrected;
+        gameStateRef.current = { ...corrected, sequence: data.sequence || 0 };
         onGameStateReceived({ ...corrected, sequence: data.sequence || 0, reason: data.reason || null });
       }
     });
@@ -248,7 +278,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       } else if (data.state && onGameStateReceived) {
         const deserialized = deserializeGameState(data.state);
         const corrected = _correctTurnTimer(deserialized, data.timestamp);
-        gameStateRef.current = corrected;
+        gameStateRef.current = { ...corrected, sequence: data.sequence || 0 };
         onGameStateReceived({ ...corrected, sequence: data.sequence || 0, reason: null });
       }
     });
@@ -293,6 +323,17 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     });
 
     connRef.current.onMessageType(MESSAGE_TYPES.CHAT_MESSAGE, (data, _pId) => {
+      if (networkRoleRef.current === NETWORK_ROLE.HOST && syncRef.current) {
+        // Chat sends peer ids, but the game keys players by color — resolve the
+        // sender's color from the lobby before asking the host to apply cheats.
+        const sender = lobbyRef.current?.players.find(p => p.id === data.senderId);
+        if (sender?.color) {
+          console.log(`[Cheat] chat from ${data.senderName} (color ${sender.color}): "${data.text}"`);
+          syncRef.current.applyChatCheat(sender.color, data.text);
+        } else {
+          console.log(`[Cheat] could not resolve color for sender ${data.senderId}`);
+        }
+      }
       if (data.senderId !== playerIdRef.current) {
         setChatMessages(prev => [...prev, data]);
         playSound('chat_message');
@@ -379,6 +420,8 @@ export function NetworkProvider({ children, onGameStateReceived }) {
 
   const leaveRoom = useCallback(() => {
     _stopJoinRetry();
+    clearTimeout(disconnectNoticeTimerRef.current);
+    disconnectNoticeTimerRef.current = null;
     if (connRef.current) {
       connRef.current.sendToAll(MESSAGE_TYPES.LEAVE_ROOM, {
         playerId: playerIdRef.current,
@@ -445,7 +488,8 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       }
       syncRef.current._handleRollRequest({ playerId }, connRef.current.myPeerId);
     } else {
-      connRef.current.sendToPeer(MESSAGE_TYPES.ROLL_REQUEST, { playerId }, hostPeerIdRef.current);
+      const hostId = hostPeerIdRef.current;
+      if (hostId) connRef.current.sendToPeer(MESSAGE_TYPES.ROLL_REQUEST, { playerId }, hostId);
     }
   }, [networkRole]);
 
@@ -459,7 +503,8 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       }
       syncRef.current._handleMoveRequest({ playerId, pieceId, diceValue }, connRef.current.myPeerId);
     } else {
-      connRef.current.sendToPeer(MESSAGE_TYPES.MOVE_REQUEST, { playerId, pieceId, diceValue }, hostPeerIdRef.current);
+      const hostId = hostPeerIdRef.current;
+      if (hostId) connRef.current.sendToPeer(MESSAGE_TYPES.MOVE_REQUEST, { playerId, pieceId, diceValue }, hostId);
     }
   }, [networkRole]);
 
@@ -476,6 +521,10 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     };
     connRef.current.sendToAll(MESSAGE_TYPES.CHAT_MESSAGE, msg);
     setChatMessages(prev => [...prev, msg]);
+    if (networkRoleRef.current === NETWORK_ROLE.HOST && syncRef.current) {
+      console.log(`[Cheat] host sent chat "${msg.text}" as ${sender?.name} (color ${sender?.color})`);
+      syncRef.current.applyChatCheat(sender?.color, msg.text);
+    }
   }, [lobby]);
 
   const networkEndTurn = useCallback((playerId) => {
@@ -488,7 +537,8 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       }
       syncRef.current._handleEndTurnRequest({ playerId }, connRef.current.myPeerId);
     } else {
-      connRef.current.sendToPeer(MESSAGE_TYPES.END_TURN_REQUEST, { playerId }, hostPeerIdRef.current);
+      const hostId = hostPeerIdRef.current;
+      if (hostId) connRef.current.sendToPeer(MESSAGE_TYPES.END_TURN_REQUEST, { playerId }, hostId);
     }
   }, [networkRole]);
 
@@ -501,9 +551,11 @@ export function NetworkProvider({ children, onGameStateReceived }) {
   const requestRematch = useCallback(() => {
     if (!connRef.current || !playerIdRef.current) return;
     if (networkRole === NETWORK_ROLE.HOST) return;
+    const hostId = hostPeerIdRef.current;
+    if (!hostId) return;
     connRef.current.sendToPeer(MESSAGE_TYPES.REMATCH_REQUEST, {
       playerId: playerIdRef.current,
-    }, hostPeerIdRef.current);
+    }, hostId);
   }, [networkRole]);
 
   const requestFullState = useCallback(() => {
@@ -557,6 +609,8 @@ export function NetworkProvider({ children, onGameStateReceived }) {
       window.removeEventListener('beforeunload', handleTabClose);
       window.removeEventListener('pagehide', handleTabClose);
       _stopJoinRetry();
+      clearTimeout(disconnectNoticeTimerRef.current);
+      disconnectNoticeTimerRef.current = null;
       if (syncRef.current) syncRef.current.destroy();
       syncRef.current = null;
       if (connRef.current) {
