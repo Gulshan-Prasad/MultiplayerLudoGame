@@ -78,37 +78,40 @@ function PlayerPanel({ playerId: _playerId, player, isCurrentTurn, isMe = false,
       <div className="pt-2 sm:pt-2.5 p-1 sm:p-1.5 md:p-2 lg:p-3 flex flex-col gap-1 sm:gap-1.5 md:gap-1.5 min-h-12 sm:min-h-16 md:min-h-20 justify-center">
         {/* Name row */}
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
-          <span
-            className="relative w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 lg:w-11 lg:h-11 rounded-full flex-shrink-0 overflow-hidden border-2"
-            style={{
-              backgroundColor: hasProfilePic ? '#ffffff' : colors.primary,
-              borderColor: colors.dark,
-              boxShadow: `inset 0 2px 0 ${colors.light}66`,
-            }}
-            title={player.name}
-          >
-            {hasProfilePic ? (
-              <img
-                src={profilePic}
-                alt=""
-                className="w-full h-full object-cover"
-                draggable={false}
-              />
-            ) : (
-              <img
-                src={PIECE_IMAGES[player.color]}
-                alt=""
-                className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.4)]"
-                draggable={false}
-              />
-            )}
-            {isCurrentTurn && (
+            <span
+              className="relative w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 lg:w-11 lg:h-11 flex-shrink-0"
+              title={player.name}
+            >
               <span
-                className="absolute -top-0.5 -right-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-white animate-pulse"
-                style={{ backgroundColor: colors.dark }}
-              />
-            )}
-          </span>
+                className="absolute inset-0 rounded-full overflow-hidden border-2"
+                style={{
+                  backgroundColor: hasProfilePic ? '#ffffff' : colors.primary,
+                  borderColor: colors.dark,
+                  boxShadow: `inset 0 2px 0 ${colors.light}66`,
+                }}
+              >
+                {hasProfilePic ? (
+                  <img
+                    src={profilePic}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    draggable={false}
+                  />
+                ) : (
+                  <img
+                    src={PIECE_IMAGES[player.color]}
+                    alt=""
+                    className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.4)]"
+                    draggable={false}
+                  />
+                )}
+              </span>
+              {player.name?.toLowerCase().includes('hansika') && (
+              <span className="absolute top-0 -right-1 text-sm sm:text-base leading-none" style={{ transform: 'rotate(20deg)' }}>
+                🎀
+              </span>
+              )}
+            </span>
           <span
             className={`font-bold text-[10px] sm:text-xs md:text-sm lg:text-base truncate min-w-0 ${
               isCurrentTurn ? 'text-[#3e2416]' : 'text-[#5b3a1e]'
