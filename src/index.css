@@ -49,6 +49,26 @@
   animation: pulse-glow 1s ease-in-out infinite;
 }
 
+/* Current-turn player panel: a strong colored outline with a breathing glow
+   around the whole card so the active player is obvious at a glance. The
+   color is supplied per-panel via --player-turn-color. */
+.player-turn-glow {
+  animation: player-turn-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes player-turn-pulse {
+  0%, 100% {
+    box-shadow: 4px 4px 0 #1e1109,
+      0 0 0 2px var(--player-turn-color),
+      0 0 9px 1px var(--player-turn-color);
+  }
+  50% {
+    box-shadow: 4px 4px 0 #1e1109,
+      0 0 0 4px var(--player-turn-color),
+      0 0 18px 4px var(--player-turn-color);
+  }
+}
+
 /* ============================================================
    Piece highlights — highlighted sprite + soft glow
    ============================================================ */

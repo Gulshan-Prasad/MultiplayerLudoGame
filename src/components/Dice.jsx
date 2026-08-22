@@ -77,7 +77,7 @@ function Dice() {
   const shownValue = (rolling ? displayValue : (diceValue > 0 ? diceValue : displayValue)) || 0;
 
   return (
-    <div className="flex flex-col items-center gap-1.5 sm:gap-3">
+    <div className="flex flex-col items-center gap-1 sm:gap-2">
       {showPenalty && (
         <div className="text-[#93302f] font-bold text-xs sm:text-sm md:text-base animate-bounce bg-[#fde8e8] border-2 border-[#d64545] px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg text-center">
           Three 6's! Turn forfeited!

@@ -57,15 +57,14 @@ function PlayerPanel({ playerId: _playerId, player, isCurrentTurn, isMe = false,
           relative rounded-xl overflow-hidden transition-all duration-300 border-2
           ${disconnected ? 'opacity-50 grayscale' : ''}
           ${isCurrentTurn
-            ? 'shadow-[4px_4px_0_#1e1109] ring-2 ring-offset-1'
+            ? 'player-turn-glow'
             : 'shadow-[2px_2px_0_#1e1109] opacity-90 hover:opacity-100'}
         `}
         style={{
           backgroundColor: isCurrentTurn ? colors.bg : '#f6ecd2',
           borderColor: isCurrentTurn ? colors.primary : '#b08d57',
-          boxShadow: isCurrentTurn
-            ? `4px 4px 0 #1e1109, 0 0 0 2px ${colors.primary}55`
-            : '2px 2px 0 #1e1109',
+          boxShadow: isCurrentTurn ? '4px 4px 0 #1e1109' : undefined,
+          ['--player-turn-color']: colors.primary,
         }}
       >
       {/* Color accent strip */}

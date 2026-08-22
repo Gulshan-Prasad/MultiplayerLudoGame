@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { NetworkContext } from './useNetwork';
 import { ConnectionManager } from './ConnectionManager';
 import { SyncManager } from './SyncManager';
+import { useGame } from '../context/GameContext';
 import { MESSAGE_TYPES } from './NetworkMessages';
 import { generateRoomCode, validateRoomCode, createDefaultLobby, addPlayerToLobby, removePlayerFromLobby, updatePlayerReady, updatePlayerProfilePic } from './RoomManager';
 import { deserializeGameState } from './GameSerializer';
@@ -17,6 +18,7 @@ const _correctTurnTimer = (state, hostBroadcastTimestamp) => {
 };
 
 export function NetworkProvider({ children, onGameStateReceived }) {
+  const { resetSyncSequence } = useGame();
   const [connectionStatus, setConnectionStatus] = useState(CONNECTION_STATUS.DISCONNECTED);
   const [networkRole, setNetworkRole] = useState(NETWORK_ROLE.NONE);
   const [roomCode, setRoomCode] = useState(null);
@@ -50,6 +52,10 @@ export function NetworkProvider({ children, onGameStateReceived }) {
   const _setupConnection = useCallback((roomCodeVal, playerName, profilePic) => {
     playerNameRef.current = playerName;
     if (profilePic !== undefined) playerProfilePicRef.current = profilePic || null;
+
+    // A fresh room starts its broadcast sequence at 1 again; drop the previous
+    // session's sequence watermark so its states can hydrate.
+    resetSyncSequence();
 
     if (!connRef.current) {
       connRef.current = new ConnectionManager();
@@ -347,7 +353,7 @@ export function NetworkProvider({ children, onGameStateReceived }) {
     });
 
     return { peerId, isHost: connRef.current.isHost() };
-  }, [onGameStateReceived, _stopJoinRetry]);
+  }, [onGameStateReceived, _stopJoinRetry, resetSyncSequence]);
 
   const createRoom = useCallback((playerName, maxPlayers, profilePic) => {
     const code = generateRoomCode();

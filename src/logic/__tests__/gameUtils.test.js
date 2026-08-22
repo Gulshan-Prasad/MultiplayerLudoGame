@@ -152,6 +152,53 @@ describe('executeMove / calculateMoves', () => {
     expect(newState.players.red.pieces[0].isFinished).toBe(true);
     expect(newState.players.red.finishedPieces).toBe(1);
   });
+
+  it('bounces a home-stretch piece back when the roll overshoots the finish', () => {
+    const state = twoPlayerState();
+    // One cell from home (55) is the last stretch cell; 54 with a 5 would land
+    // on 59, overshooting the finish (56) by 3, so it bounces back to 53.
+    state.players.red.pieces[0].position = 54;
+    state.players.red.pieces[0].isHome = false;
+    state.players.red.pieces[0].isActive = true;
+    state.diceValue = 5;
+
+    const moves = calculateMoves(state, 'red');
+    expect(moves).toHaveLength(1);
+    const move = moves[0];
+    expect(move.toPosition).toBe(53);
+    expect(move.entersHomeStretch).toBe(true);
+    expect(move.finishes).toBe(false);
+    expect(move.types).toContain('homeStretch');
+
+    const { newState } = executeMove(state, 'red', 0, move);
+    expect(newState.players.red.pieces[0].position).toBe(53);
+    expect(newState.players.red.pieces[0].isFinished).toBe(false);
+  });
+
+  it('still finishes on an exact landing from the home stretch', () => {
+    const state = twoPlayerState();
+    state.players.red.pieces[0].position = 51;
+    state.players.red.pieces[0].isHome = false;
+    state.players.red.pieces[0].isActive = true;
+    state.diceValue = 5;
+
+    const moves = calculateMoves(state, 'red');
+    const finish = moves.find(m => m.finishes && m.toPosition === FINISH_POS);
+    expect(finish).toBeTruthy();
+  });
+
+  it('never overshoots from the main path (max roll lands exactly on the finish)', () => {
+    const state = twoPlayerState();
+    state.players.red.pieces[0].position = MAIN_PATH_LENGTH - 1;
+    state.players.red.pieces[0].isHome = false;
+    state.players.red.pieces[0].isActive = true;
+    state.diceValue = 6;
+
+    const moves = calculateMoves(state, 'red');
+    const finish = moves.find(m => m.finishes && m.toPosition === FINISH_POS);
+    expect(finish).toBeTruthy();
+    expect(moves.every(m => m.toPosition <= FINISH_POS)).toBe(true);
+  });
 });
 
 describe('getNextPlayer', () => {
@@ -224,5 +271,12 @@ describe('computeAnimationFrames', () => {
     expect(frames).toHaveLength(4);
     expect(frames[0]).toEqual(PER_PLAYER_PATHS.red[0]);
     expect(frames[3]).toEqual(PER_PLAYER_PATHS.red[3]);
+  });
+
+  it('walks backward on the home stretch for a bounce move', () => {
+    const frames = computeAnimationFrames(54, 53, 'red');
+    expect(frames).toHaveLength(2);
+    expect(frames[0]).toEqual(PER_PLAYER_PATHS.red[54]);
+    expect(frames[1]).toEqual(PER_PLAYER_PATHS.red[53]);
   });
 });

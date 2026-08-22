@@ -16,7 +16,7 @@ import TurnActionButton from './components/TurnActionButton';
 import CoolNameInput from './components/CoolNameInput';
 import WinnerModal from './components/WinnerModal';
 import GameSoundEffects from './components/GameSoundEffects';
-import { subscribeSound, getSoundMuted, toggleMute, playSound } from './utils/sound';
+import { subscribeSound, getSoundMuted, toggleMute } from './utils/sound';
 import { GAME_STATUS, GAME_PHASES, COLOR_MAP, PLAYER_NAME_STORAGE_KEY, PLAYER_PROFILE_PIC_STORAGE_KEY } from './data/constants';
 
 function SoundToggle() {
@@ -67,14 +67,48 @@ function LeaveButton({ onClick, label = 'Leave', ariaLabel = 'Leave game' }) {
   );
 }
 
+function FullscreenToggle() {
+  const [fs, setFs] = useState(false);
+
+  useEffect(() => {
+    const onChange = () => setFs(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggle = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      aria-label={fs ? 'Exit full screen' : 'Full screen'}
+      title={fs ? 'Exit full screen' : 'Full screen'}
+      className="btn-3d btn-3d-gold btn-sm w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 rounded-lg p-0"
+    >
+      {fs ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="w-5 h-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="w-5 h-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 3H5a2 2 0 00-2 2v3m20 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function GameScreenShell({ leaveButton, playerPanels, board, belowBoard, info, dice, actions, desktopChatOffset = false }) {
   return (
     <div className="h-dvh w-full overflow-hidden flex flex-col page-bg">
       <header className="flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-3 py-1.5 sm:py-2 flex-shrink-0 min-w-0">
         {leaveButton}
-        <div className="ml-auto">
-          <SoundToggle />
-        </div>
       </header>
 
       <main className={`flex-1 min-h-0 flex gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-1.5 sm:py-2 min-w-0 ${desktopChatOffset ? 'lg:pr-[268px]' : ''}`}>
@@ -94,9 +128,9 @@ function GameScreenShell({ leaveButton, playerPanels, board, belowBoard, info, d
               <div className="min-w-0 flex items-center">
                 {info}
               </div>
-              <div className="flex flex-col items-center justify-center h-[150px] sm:h-[170px]">
+              <div className="flex flex-col items-center justify-center h-[128px] sm:h-[144px]">
                 {dice}
-                <div className="h-[44px] flex items-center justify-center w-full min-w-0">
+                <div className="h-[30px] flex items-center justify-center w-full min-w-0">
                   {belowBoard}
                 </div>
               </div>
@@ -107,9 +141,9 @@ function GameScreenShell({ leaveButton, playerPanels, board, belowBoard, info, d
         </div>
 
         <aside className="hidden [@media(min-width:768px)_and_(min-height:500px)]:flex [@media(min-width:768px)_and_(min-height:500px)]:flex-col w-48 md:w-56 xl:w-60 flex-shrink-0 gap-2 min-h-0">
-          <div className="card-classic p-3 sm:p-4 flex-shrink-0 h-[270px] flex flex-col items-center justify-center overflow-hidden">
+          <div className="card-classic p-3 sm:p-4 flex-shrink-0 h-[215px] flex flex-col items-center justify-center overflow-hidden">
             {info}
-            <div className="mt-2 sm:mt-3 flex-shrink-0">{dice}</div>
+            <div className="mt-1.5 sm:mt-2 flex-shrink-0">{dice}</div>
           </div>
           {actions && <div className="flex-shrink-0">{actions}</div>}
         </aside>
@@ -328,9 +362,9 @@ function MultiplayerGameContent() {
 }
 
 function LocalGameContent() {
-  const { state, saveGame, undoMove, newGame, resetState } = useGame();
+  const { state, resetState } = useGame();
   const navigate = useNavigate();
-  const { gameStatus, players, currentTurn, gamePhase, moveHistory } = state;
+  const { players, currentTurn, gamePhase } = state;
 
   const playerEntries = Object.entries(players);
   const currentPlayer = players[currentTurn];
@@ -389,31 +423,6 @@ function LocalGameContent() {
     return null;
   })();
 
-  const actions = (
-    <div className="flex flex-wrap gap-1.5 sm:gap-2">
-      <button
-        onClick={() => { playSound('new_game'); newGame(); }}
-        className="btn-3d btn-3d-red btn-sm flex-1 min-w-[64px]"
-      >
-        New
-      </button>
-      <button
-        onClick={() => { playSound('save'); saveGame(); }}
-        className="btn-3d btn-3d-green btn-sm flex-1 min-w-[64px]"
-        disabled={gameStatus !== GAME_STATUS.IN_PROGRESS}
-      >
-        Save
-      </button>
-      <button
-        onClick={() => { playSound('undo'); undoMove(); }}
-        className="btn-3d btn-3d-gray btn-sm flex-1 min-w-[64px]"
-        disabled={moveHistory.length === 0 || gamePhase === GAME_PHASES.GAME_OVER}
-      >
-        Undo
-      </button>
-    </div>
-  );
-
   return (
     <GameScreenShell
       leaveButton={leaveButton}
@@ -422,7 +431,6 @@ function LocalGameContent() {
       belowBoard={belowBoard}
       info={info}
       dice={dice}
-      actions={actions}
     />
   );
 }
@@ -708,6 +716,13 @@ function RoutesWithGameStateHandler() {
       <DisconnectBanner />
       <WinnerModal />
       <GameSoundEffects />
+      <div
+        className="top-3 right-3 z-50 flex items-center gap-1.5 sm:gap-2 rounded-lg"
+        style={{ position: 'fixed' }}
+      >
+        <SoundToggle />
+        <FullscreenToggle />
+      </div>
     </NetworkProvider>
   );
 }

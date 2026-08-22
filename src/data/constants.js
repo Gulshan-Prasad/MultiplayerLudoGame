@@ -55,7 +55,7 @@ export const PATH_SECTIONS = {
   },
 };
 
-export const TURN_TIMER_SECONDS = 30;
+export const TURN_TIMER_SECONDS = 45;
 // After a move completes (no End Turn button anymore), the turn auto-advances
 // once the piece animation has had time to play out.
 export const TURN_COMPLETE_AUTO_ADVANCE_MS = 700;

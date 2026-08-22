@@ -146,8 +146,6 @@ export function calculateMoves(state, playerId) {
 
     const { newPos, entersHomeStretch, finishes } = getMoveDestination(relPos, dice);
 
-    if (!finishes && relPos + dice > FINISH_POS) continue;
-
     if (finishes) {
       possibleMoves.push({
         pieceId: piece.id,
@@ -360,9 +358,18 @@ export function computeAnimationFrames(fromPos, toPos, playerColor) {
   if (fromPos === toPos) return [];
 
   const frames = [];
-  for (let pos = fromPos; pos <= toPos; pos++) {
-    const coord = getPieceCoordinates(playerColor, pos);
-    if (coord) frames.push(coord);
+  // Bounce moves (overshooting the finish on the home stretch) walk backward;
+  // everything else walks forward along the player's path.
+  if (toPos >= fromPos) {
+    for (let pos = fromPos; pos <= toPos; pos++) {
+      const coord = getPieceCoordinates(playerColor, pos);
+      if (coord) frames.push(coord);
+    }
+  } else {
+    for (let pos = fromPos; pos >= toPos; pos--) {
+      const coord = getPieceCoordinates(playerColor, pos);
+      if (coord) frames.push(coord);
+    }
   }
   return frames;
 }

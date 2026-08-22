@@ -90,6 +90,15 @@ export function GameProvider({ children }) {
     dispatch({ type: 'HYDRATE_STATE', payload: newState });
   }, []);
 
+  // A fresh online connection (createRoom / joinRoom) rebuilds the SyncManager
+  // from sequence 1. Without a reset here, the sequence ref keeps its last
+  // value and every broadcast of the new session gets rejected as "stale", so
+  // the second online game in the same tab never hydrates. Reset it whenever a
+  // brand-new connection is set up so each session is tracked independently.
+  const resetSyncSequence = useCallback(() => {
+    syncSequenceRef.current = 0;
+  }, []);
+
   const contextValue = {
     state,
     dispatch,
@@ -103,6 +112,7 @@ export function GameProvider({ children }) {
     resetGame,
     resetState,
     hydrateState,
+    resetSyncSequence,
     animatingRef,
   };
 
