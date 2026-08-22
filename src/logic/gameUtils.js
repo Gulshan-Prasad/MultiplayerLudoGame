@@ -144,6 +144,12 @@ export function calculateMoves(state, playerId) {
 
     const relPos = piece.position;
 
+    if (relPos >= MAIN_PATH_LENGTH && relPos < FINISH_POS) {
+      if (relPos + dice > FINISH_POS) {
+        continue;
+      }
+    }
+
     const { newPos, entersHomeStretch, finishes } = getMoveDestination(relPos, dice);
 
     if (finishes) {

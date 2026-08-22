@@ -280,7 +280,7 @@ export function gameReducer(state, action) {
     }
 
     case 'TIMEOUT_TURN': {
-      if (state.gamePhase !== GAME_PHASES.ROLLING && state.gamePhase !== GAME_PHASES.TURN_COMPLETE) return state;
+      if (state.gamePhase !== GAME_PHASES.ROLLING && state.gamePhase !== GAME_PHASES.TURN_COMPLETE && state.gamePhase !== GAME_PHASES.SELECTING_PIECE) return state;
       const nextPlayer = getNextPlayer(state);
       if (!nextPlayer) {
         return {

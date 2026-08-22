@@ -153,26 +153,17 @@ describe('executeMove / calculateMoves', () => {
     expect(newState.players.red.finishedPieces).toBe(1);
   });
 
-  it('bounces a home-stretch piece back when the roll overshoots the finish', () => {
+  it('rejects a home-stretch roll that overshoots the finish', () => {
     const state = twoPlayerState();
-    // One cell from home (55) is the last stretch cell; 54 with a 5 would land
-    // on 59, overshooting the finish (56) by 3, so it bounces back to 53.
+    // Position 54 with a 5 would land on 59, overshooting the finish (56).
+    // The move should be invalid — no moves returned for this piece.
     state.players.red.pieces[0].position = 54;
     state.players.red.pieces[0].isHome = false;
     state.players.red.pieces[0].isActive = true;
     state.diceValue = 5;
 
     const moves = calculateMoves(state, 'red');
-    expect(moves).toHaveLength(1);
-    const move = moves[0];
-    expect(move.toPosition).toBe(53);
-    expect(move.entersHomeStretch).toBe(true);
-    expect(move.finishes).toBe(false);
-    expect(move.types).toContain('homeStretch');
-
-    const { newState } = executeMove(state, 'red', 0, move);
-    expect(newState.players.red.pieces[0].position).toBe(53);
-    expect(newState.players.red.pieces[0].isFinished).toBe(false);
+    expect(moves).toHaveLength(0);
   });
 
   it('still finishes on an exact landing from the home stretch', () => {

@@ -13,10 +13,8 @@ export function GameProvider({ children }) {
 
   useEffect(() => {
     if (state.sequence != null) return;
-    if ((state.gamePhase === GAME_PHASES.ROLLING || state.gamePhase === GAME_PHASES.TURN_COMPLETE)
+    if ((state.gamePhase === GAME_PHASES.ROLLING || state.gamePhase === GAME_PHASES.TURN_COMPLETE || state.gamePhase === GAME_PHASES.SELECTING_PIECE)
       && !state.diceRolling && state.gameStatus === GAME_STATUS.IN_PROGRESS) {
-      // TURN_COMPLETE auto-advances quickly (no End Turn button anymore) so the
-      // piece animation plays out before the next player rolls.
       const delay = state.gamePhase === GAME_PHASES.TURN_COMPLETE
         ? TURN_COMPLETE_AUTO_ADVANCE_MS
         : TURN_TIMER_SECONDS * 1000;
